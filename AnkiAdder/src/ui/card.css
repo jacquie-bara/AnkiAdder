@@ -1,0 +1,21 @@
+.card{font-family:Arial,"Segoe UI",sans-serif;background:#fff;color:#171b18;margin:0;padding:18px}
+.vocab-card{font-family:Arial,"Segoe UI",sans-serif;font-size:18px;line-height:1.35;color:#171b18;background:#fff;max-width:1000px;margin:auto;overflow-wrap:anywhere;text-align:left}
+.vocab-card .word-heading{text-align:center;font-size:22px;font-weight:600;margin:0 0 14px}
+.vocab-card .word-type{font-weight:400}
+.vocab-card .pronunciation{font-size:13px;color:#697269;text-align:center;margin:4px 0}
+.vocab-card hr{border:0;border-top:1px solid #a5aaa6;margin:12px 0 16px}
+.vocab-card .definition-list{display:table;margin:0 auto 16px;padding-left:25px}
+.vocab-card .key-forms{text-align:center;font-weight:600;margin:16px 0 22px;line-height:1.6}
+.vocab-card mark{background:#fff36a;color:#171b18;box-decoration-break:clone;-webkit-box-decoration-break:clone;padding:2px 3px}
+.vocab-card .sense-list{padding-left:24px;margin:0;list-style-type:decimal}
+.vocab-card .sense-list>li{margin:0 0 16px}
+.vocab-card .sense-list>li:last-child{margin-bottom:0}
+.vocab-card .example-list{padding-left:24px;margin:3px 0 0;list-style-type:circle}
+.vocab-card .example-list li{margin:3px 0;line-height:1.35}
+.vocab-card .translation{color:#4f5851;font-size:.93em}
+.vocab-card .audio-label{font-size:10px;color:#687169;text-align:center}
+.vocab-card .card-warning{font-size:12px;color:#95632a;margin-top:12px}
+.preview-sheet.vocab-card{font-size:16px}
+.nightMode .vocab-card,.nightMode.card{background:#202923;color:#edf1ed}
+.nightMode .vocab-card .translation,.nightMode .vocab-card .pronunciation,.nightMode .vocab-card .audio-label{color:#b9c4ba}
+@media(max-width:600px){.vocab-card{font-size:16px}.vocab-card .word-heading{font-size:20px}.vocab-card .example-list{padding-left:16px}.vocab-card .sense-list{padding-left:18px}}

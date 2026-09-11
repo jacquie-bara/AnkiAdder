@@ -1,0 +1,55 @@
+{
+  "name": "anki-adder",
+  "version": "1.3.0",
+  "description": "Turn a word into a complete language-learning card in Anki.",
+  "author": "AnkiAdder",
+  "private": true,
+  "main": "src/main.cjs",
+  "scripts": {
+    "icons": "node scripts/icons.cjs",
+    "start": "electron .",
+    "test": "node --test test/*.test.cjs",
+    "test:ui": "node test/smoke.cjs",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win nsis",
+    "dist:mac": "electron-builder --mac dmg zip"
+  },
+  "devDependencies": {
+    "electron": "44.3.0",
+    "electron-builder": "26.15.3",
+    "playwright": "1.63.0",
+    "sharp": "^0.35.4"
+  },
+  "build": {
+    "appId": "com.ankiadder.desktop",
+    "productName": "AnkiAdder",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "src/assets/icon.ico",
+      "signExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "AnkiAdder",
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "icon": "src/assets/icon.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.education"
+    }
+  }
+}
