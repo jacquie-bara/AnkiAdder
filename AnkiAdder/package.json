@@ -5,11 +5,17 @@
   "author": "AnkiAdder",
   "private": true,
   "main": "src/main.cjs",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
+    "preinstall": "node scripts/check-node.cjs",
     "icons": "node scripts/icons.cjs",
+    "prestart": "node scripts/check-node.cjs",
     "start": "electron .",
     "test": "node --test test/*.test.cjs",
     "test:ui": "node test/smoke.cjs",
+    "test:batch": "node test/batch-ui.cjs",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "dist:win": "electron-builder --win nsis",

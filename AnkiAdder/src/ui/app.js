@@ -4,6 +4,8 @@ const escape = window.AnkiCard.escapeHtml;
 const pricing = window.AnkiPricing;
 let settings, history = [], current, busy = false, player, decks = [];
 let settingsTimer, settingsDirty = false, settingsSave, settingsRevision = 0;
+let batchState = { status: 'idle', items: [] }, batchTimer;
+const batchActive = () => ['running', 'stopping'].includes(batchState.status);
 
 function notice(message, error = false) { $('#notice').textContent = message; $('#notice').classList.toggle('error', error); $('#notice').hidden = !message; }
 function page(name) {
@@ -13,6 +15,7 @@ function page(name) {
   window.scrollTo(0, 0);
 }
 function setBusy(value, generating = false) {
+  value = value || batchActive();
   busy = value;
   $('#generate').disabled = value; $('#word').disabled = value;
   $('#quick-audio').disabled = value;
@@ -20,6 +23,9 @@ function setBusy(value, generating = false) {
   $('#loading').hidden = !generating; $('#cancel').hidden = !generating;
   $('#generate').textContent = generating ? 'Creating…' : settings?.autoAdd ? 'Create & add ↗' : 'Create card ↗';
   $('#empty').hidden = generating || Boolean(current);
+  $('#batch-words').disabled = value;
+  $('#batch-start').disabled = value || batchState.items.some(item => item.status === 'pending');
+  $('#batch-resume').disabled = value; $('#batch-retry').disabled = value;
 }
 function fillSettings(updateForm = true) {
   const form = $('#settings-form');
@@ -39,6 +45,7 @@ function fillSettings(updateForm = true) {
   renderDecks();
   $('#generate').textContent = settings.autoAdd ? 'Create & add ↗' : 'Create card ↗';
   $('#quick-audio').checked = settings.audioEnabled;
+  $('#batch-settings').textContent = `${settings.sourceLanguage} → ${settings.translationLanguage} · Pronunciation ${settings.audioEnabled ? 'on' : 'off'} · Uses your saved language, voice and card settings. Each new word uses the API.`;
   const rates = pricing.rates[settings.model];
   $('#pricing-info').textContent = `${settings.model}: ${rates ? `$${rates.input} input / $${rates.cached} cached input / $${rates.output} output per million tokens.` : 'No built-in price; text cost will show unavailable.'} Pronunciation: $0.60 input text / $12 output audio per million tokens.`;
   renderCosts();
@@ -189,8 +196,10 @@ $('#settings-form').addEventListener('submit', async event => { event.preventDef
 function setDecks(names) { decks = names; renderDecks(); }
 function renderDecks() {
   const names = decks.includes(settings.deck) ? decks : [settings.deck, ...decks];
-  $('#deck-select').replaceChildren(...names.map(name => { const o = document.createElement('option'); o.value = name; o.textContent = name + (decks.includes(name) ? '' : ' (saved / new)'); return o; }));
-  $('#deck-select').value = settings.deck;
+  for (const selector of ['#deck-select', '#batch-deck']) {
+    $(selector).replaceChildren(...names.map(name => { const o = document.createElement('option'); o.value = name; o.textContent = name + (decks.includes(name) ? '' : ' (saved / new)'); return o; }));
+    $(selector).value = settings.deck;
+  }
 }
 async function chooseDeck(value) {
   if (busy || !await flushSettings()) { renderDecks(); return; }
@@ -200,6 +209,7 @@ async function chooseDeck(value) {
   finally { setBusy(false); }
 }
 $('#deck-select').addEventListener('change', event => chooseDeck(event.target.value));
+$('#batch-deck').addEventListener('change', event => chooseDeck(event.target.value));
 $('#refresh-decks').addEventListener('click', async () => { if (await flushSettings()) await checkAnki(); });
 $('#new-deck').addEventListener('click', () => { $('#new-deck-row').hidden = !$('#new-deck-row').hidden; if (!$('#new-deck-row').hidden) $('#new-deck-name').focus(); });
 $('#choose-new-deck').addEventListener('click', () => chooseDeck($('#new-deck-name').value.trim()));
@@ -219,10 +229,51 @@ $('#quick-audio').addEventListener('change', async () => {
 });
 $('#reconnect').addEventListener('click', checkAnki); $('#test-anki').addEventListener('click', checkAnki);
 async function init() {
-  try { settings = await api.settings(); fillSettings(); await refreshHistory(); await checkAnki(); }
+  try { settings = await api.settings(); fillSettings(); await refreshHistory(); await syncBatch(); await checkAnki(); }
   catch (e) { notice(e.message, true); }
 }
 init();
+function renderBatch() {
+  const { items, status } = batchState;
+  $('#batch-progress').hidden = !items.length;
+  const count = name => items.filter(item => item.status === name).length;
+  const finished = items.length - count('pending') - count('processing');
+  const currentWord = items.find(item => item.status === 'processing')?.word;
+  const title = status === 'running' ? 'Processing' : status === 'stopping' ? 'Stopping after this word' : status === 'paused' ? 'Paused' : 'Finished';
+  $('#batch-summary').textContent = `${title} · ${finished}/${items.length} processed · ${count('added') + count('updated')} added · ${count('duplicate')} already in Anki · ${count('review')} to review · ${count('failed')} failed${currentWord ? ` · ${currentWord}` : ''}${batchState.settings ? ` · Deck: ${batchState.settings.deck}` : ''}`;
+  $('#batch-meter').max = items.length || 1; $('#batch-meter').value = finished;
+  $('#batch-error').textContent = batchState.error || '';
+  $('#batch-stop').hidden = !batchActive(); $('#batch-stop').disabled = status === 'stopping';
+  $('#batch-resume').hidden = batchActive() || !count('pending');
+  $('#batch-retry').hidden = batchActive() || !count('failed') || Boolean(count('pending'));
+  const labels = { pending: 'Waiting', processing: 'Creating & adding…', added: 'Added to Anki', updated: 'Updated in Anki', duplicate: 'Already in Anki', review: 'Saved for review', failed: 'Failed' };
+  $('#batch-results').innerHTML = items.map(item => `<li><span><strong dir="auto">${escape(item.word)}</strong><small>${escape(labels[item.status] || item.status)}${item.error ? ` · ${escape(item.error)}` : ''}</small></span>${item.recordId ? `<button class="text-button" data-record="${escape(item.recordId)}" ${batchActive() ? 'disabled' : ''}>View entry →</button>` : ''}</li>`).join('');
+}
+async function syncBatch() {
+  clearTimeout(batchTimer);
+  try {
+    const previous = JSON.stringify(batchState);
+    batchState = await api.batch();
+    if (JSON.stringify(batchState) !== previous) {
+      renderBatch(); setBusy(false); await refreshHistory();
+    }
+  } catch (e) { notice(e.message, true); }
+  if (batchActive()) batchTimer = setTimeout(syncBatch, 500);
+}
+async function runBatch(action) {
+  if (busy || !await flushSettings()) return;
+  player?.pause(); notice(''); setBusy(true);
+  try { batchState = await action(); renderBatch(); }
+  catch (e) { notice(e.message, true); }
+  finally { setBusy(false); await syncBatch(); }
+}
+$('#batch-form').addEventListener('submit', event => { event.preventDefault(); void runBatch(() => api.startBatch($('#batch-words').value)); });
+$('#batch-resume').addEventListener('click', () => runBatch(() => api.resumeBatch()));
+$('#batch-retry').addEventListener('click', () => runBatch(() => api.resumeBatch(true)));
+$('#batch-stop').addEventListener('click', async () => {
+  try { batchState = await api.stopBatch(); renderBatch(); }
+  catch (e) { notice(e.message, true); }
+});
 let closing = false;
 window.addEventListener('beforeunload', event => {
   if (closing || (!settingsDirty && !settingsSave)) return;

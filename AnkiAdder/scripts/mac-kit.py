@@ -7,7 +7,7 @@ root = Path(__file__).resolve().parent.parent
 version = json.loads((root / 'package.json').read_text(encoding='utf-8'))['version']
 output = root / 'release' / f'AnkiAdder-Mac-Build-Kit-{version}.zip'
 output.parent.mkdir(exist_ok=True)
-files = [root / p for p in ['package.json', 'package-lock.json', 'README.md', 'project_context.md', 'Build Mac App.command']]
+files = [root / p for p in ['package.json', 'package-lock.json', '.nvmrc', 'README.md', 'project_context.md', 'Build Mac App.command']]
 for folder in ['src', 'scripts', 'test', '.github']:
     files.extend(p for p in (root / folder).rglob('*') if p.is_file())
 with ZipFile(output, 'w', compression=ZIP_DEFLATED) as archive:

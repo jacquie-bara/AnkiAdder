@@ -9,5 +9,7 @@ contextBridge.exposeInMainWorld('ankiAdder', {
   history: () => invoke('history:list'), checkAnki: () => invoke('anki:check'),
   edit: (id, entry) => invoke('word:edit', id, entry),
   generate: word => invoke('word:generate', word), cancel: () => invoke('word:cancel'),
+  batch: () => invoke('batch:get'), startBatch: words => invoke('batch:start', words),
+  resumeBatch: (retryFailed = false) => invoke('batch:resume', retryFailed), stopBatch: () => invoke('batch:stop'),
   add: (id, replaceExisting = false) => invoke('anki:add', id, replaceExisting), audio: (id, regenerate = false) => invoke('word:audio', id, regenerate), openLink: name => invoke('external:open', name),
 });

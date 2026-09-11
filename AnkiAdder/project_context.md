@@ -4,6 +4,13 @@ Updated 2026-09-11 for version 1.3.0. Workspace: C:\dev\AnkiAdder. No git reposi
 
 ## Mac follow-up (2026-09-11)
 
+### Unattended word batches (2026-09-11)
+
+- Added **Add many words**: one word/phrase per line (up to 1,000), exact repeated/blank lines removed, destination deck selection, automatic generation/pronunciation/Anki addition independent of the single-word auto-add setting. Uses a snapshot of saved settings; no setting changes during processing. Existing notes are skipped and uncertain entries remain drafts for review. Per-word errors do not stop subsequent words.
+- `src/batch.cjs` owns the sequential main-process queue and atomic `batch.json` checkpoints. Stop finishes the current word; resume uses original settings. Restarted interrupted queues load paused. Retry failed words reuses history records by `batchItemId`, avoiding paid text regeneration after audio/Anki failures. New batches replace the previous queue summary; history entries remain.
+- Added narrow batch IPC methods in preload/main, main-process idle-sleep prevention for active batches, progress polling that survives renderer navigation/reload, per-word results and view-entry links. Closing a window lets the batch finish; explicitly quitting requires resume after restart. Keep Anki on the same profile throughout.
+- `npm run test:batch` covers mock automatic Anki/audio additions, preflight connectivity, failure continuation/retry, duplicates, navigation/reload, settings lock and stop/restart/resume. `test/batch.test.cjs` covers parsing, sequential processing, stop/persistence, interrupted recovery and preflight/overlap failures. All tests use temporary profiles and mock APIs; no real API calls or collection writes.
+
 Current workspace is `/Users/yiwang/Projects/ankiadder/AnkiAdder` on macOS 15, Apple Silicon, with git at the parent directory. Use the current shell/environment rather than the historical Windows workflow notes below. Existing user formatting changes in `src/ui/index.html` were preserved.
 
 - Removed the eyebrow, title and introductory paragraph from Add a word, Your words and Settings. Kept functional labels/help and restored a screen-reader label for the word input.

@@ -32,6 +32,9 @@
           <span>▤</span> Your words
           <span id="history-count" class="count">0</span>
         </button>
+        <button class="nav" data-page="batch">
+          <span>≡</span> Add many words
+        </button>
         <button class="nav" data-page="settings">
           <span>⚙</span> Settings
         </button>
@@ -46,6 +49,33 @@
     </aside>
     <main>
       <div id="notice" role="status" aria-live="polite" hidden></div>
+      <section id="page-batch" class="page" hidden>
+        <form id="batch-form" class="word-panel batch-panel">
+          <label for="batch-words">Words to add</label>
+          <p id="batch-help" class="help">Paste one word or phrase per line, up to 1,000. Repeated lines are included once.</p>
+          <textarea id="batch-words" rows="8" maxlength="201000" placeholder="casa&#10;hablar&#10;por favor" aria-describedby="batch-help" dir="auto" required></textarea>
+          <div class="word-panel-bottom">
+            <div class="deck-controls">
+              <label for="batch-deck">Deck</label><select id="batch-deck"></select>
+              <button type="button" class="text-button" data-page="create">New / refresh</button>
+            </div>
+            <button id="batch-start" class="primary" type="submit">Create &amp; add all →</button>
+          </div>
+          <p id="batch-settings" class="help"></p>
+          <p class="help">Every completed word is added automatically. Keep Anki open on the same profile and leave your computer on; AnkiAdder can stay minimized. Uncertain entries are saved for review.</p>
+        </form>
+        <section id="batch-progress" aria-label="Batch progress" hidden>
+          <p id="batch-summary" role="status" aria-live="polite"></p>
+          <progress id="batch-meter" aria-label="Words processed" max="1" value="0"></progress>
+          <p id="batch-error" class="help"></p>
+          <div class="actions">
+            <button id="batch-stop" class="secondary" hidden>Stop after current word</button>
+            <button id="batch-resume" class="primary" hidden>Resume remaining words</button>
+            <button id="batch-retry" class="secondary" hidden>Retry failed words</button>
+          </div>
+          <ol id="batch-results"></ol>
+        </section>
+      </section>
       <section id="page-create" class="page">
         <div id="setup-banner" class="setup-banner" hidden>
           <div>

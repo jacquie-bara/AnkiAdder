@@ -16,6 +16,9 @@ const path = require('node:path');
     if (settings.detail !== 'compact' || !settings.audioEnabled) throw new Error('Compact cards and pronunciation must be enabled by default');
     if (await page.evaluate(() => typeof window.ankiAdder.audio) !== 'function') throw new Error('Missing pronunciation bridge');
     if (await page.evaluate(() => typeof window.AnkiAudio.checkRecording) !== 'function') throw new Error('Missing recording validation');
+    await page.locator('.nav[data-page=batch]').click();
+    await page.locator('#batch-words').waitFor();
+    if ((await page.evaluate(() => window.ankiAdder.batch())).status !== 'idle') throw new Error('Unexpected packaged batch state');
     console.log('Packaged app starts successfully; compact defaults, audio bridge, UI and settings verified.');
   } finally { await app.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

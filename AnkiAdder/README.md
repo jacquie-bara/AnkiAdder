@@ -29,7 +29,26 @@ npm ci
 npm start
 ```
 
+Electron requires Node.js **22.12 or newer**. Check the active version with `node --version`; an older Node.js can produce `ERR_REQUIRE_ESM` followed by “Electron failed to install correctly.” If you use nvm, run these commands in this folder to select the Node.js 24 version specified in `.nvmrc` and reinstall dependencies:
+
+```sh
+nvm install
+nvm use
+npm ci
+npm start
+```
+
 The same source runs on Windows and macOS. Anki is contacted at `http://127.0.0.1:8765`; change the local port or optional AnkiConnect key under advanced settings if needed. No browser CORS configuration is required because the desktop main process makes the request. On macOS, if Anki stops responding in the background, bring its window to the foreground.
+
+## Add many words automatically
+
+Open **Add many words**, paste one word or phrase per line, choose a deck, and click **Create & add all**. Up to 1,000 lines are supported; blank lines and exact repetitions are skipped. The batch uses your saved languages, pronunciation, voice, tags and reverse-card preference and automatically adds entries even when single-word auto-add is off.
+
+Keep Anki open on the same profile and your computer on. You can minimize AnkiAdder or navigate to another page while it works; the app prevents idle system sleep during processing. Progress shows added words, existing Anki notes, entries needing review and failures. One failed word does not stop the rest. Uncertain entries stay in **Your words** for review.
+
+**Stop after current word** finishes that word and pauses the remaining list. **Resume remaining words** uses the batch's original settings. Progress survives restarting the app; interrupted batches wait for you to resume. **Retry failed words** reuses saved text and cached audio; a failed text generation needs another paid request, and missing audio may require a speech request. Existing Anki notes are skipped instead of overwritten. Starting a new batch replaces the previous progress list; all generated entries remain in **Your words**.
+
+Run `npm run test:batch` for isolated desktop checks of automatic additions, failures, retries, duplicate handling and stop/restart/resume. Tests use mock services and temporary data.
 
 ## What gets added
 
