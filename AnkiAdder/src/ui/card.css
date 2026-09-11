@@ -1,5 +1,5 @@
-.card{font-family:Arial,"Segoe UI",sans-serif;background:#fff;color:#171b18;margin:0;padding:18px}
-.vocab-card{font-family:Arial,"Segoe UI",sans-serif;font-size:18px;line-height:1.35;color:#171b18;background:#fff;max-width:1000px;margin:auto;overflow-wrap:anywhere;text-align:left}
+.card{font-family:Arial,"Segoe UI",sans-serif;background:transparent;color:#171b18;margin:0;padding:18px}
+.vocab-card{font-family:Arial,"Segoe UI",sans-serif;font-size:18px;line-height:1.35;color:#171b18;background:transparent;max-width:1000px;margin:auto;overflow-wrap:anywhere;text-align:left}
 .vocab-card .word-heading{text-align:center;font-size:22px;font-weight:600;margin:0 0 14px}
 .vocab-card .word-type{font-weight:400}
 .vocab-card .pronunciation{font-size:13px;color:#697269;text-align:center;margin:4px 0}
@@ -16,6 +16,6 @@
 .vocab-card .audio-label{font-size:10px;color:#687169;text-align:center}
 .vocab-card .card-warning{font-size:12px;color:#95632a;margin-top:12px}
 .preview-sheet.vocab-card{font-size:16px}
-.nightMode .vocab-card,.nightMode.card{background:#202923;color:#edf1ed}
+.nightMode .vocab-card,.nightMode.card{background:transparent;color:#edf1ed}
 .nightMode .vocab-card .translation,.nightMode .vocab-card .pronunciation,.nightMode .vocab-card .audio-label{color:#b9c4ba}
 @media(max-width:600px){.vocab-card{font-size:16px}.vocab-card .word-heading{font-size:20px}.vocab-card .example-list{padding-left:16px}.vocab-card .sense-list{padding-left:18px}}

@@ -79,9 +79,10 @@ function renderPreview(record) {
   $('#empty').hidden = true; $('#preview').hidden = false;
   $('#page-create').classList.add('has-preview');
   $('#preview').innerHTML = `<div class="preview-toolbar"><span class="preview-meta">${escape(record.sourceLanguage)} · CARD PREVIEW</span><div class="actions"><button id="edit-entry" class="secondary">Edit</button>${record.format !== 'compact' ? '<button id="compact-entry" class="secondary">Make compact</button>' : ''}${record.noteId ? '<button id="update-note" class="secondary">Update existing card</button>' : ''}<button id="add-note" class="primary">${record.status === 'draft' ? 'Add to Anki →' : 'Check / add to Anki →'}</button></div></div>
-    ${record.pendingAnkiChanges ? '<p class="help">Edits saved locally. Update existing card to apply them in Anki.</p>' : ''}
+    ${record.pendingAnkiChanges ? '<p class="help">Changes saved locally. Update existing card to apply them in Anki.</p>' : ''}
     ${record.status === 'duplicate' ? '<p class="help">Update existing card replaces its text and audio with this preview, keeping its deck and review history.</p>' : ''}
     <div class="vocab-card preview-sheet"><h2 class="word-heading" dir="auto">${fields.Word}</h2><div class="preview-audio"><button id="play-audio" class="text-button" title="AI-generated pronunciation">${record.audio ? '▶ Play pronunciation' : '＋ Generate pronunciation'}</button><span>AI voice${entry.pronunciation ? ' · ' + escape(entry.pronunciation) : ''}</span></div><hr>${fields.Definitions}${fields.Forms}${fields.Meanings}${fields.Notes ? `<div class="card-warning">${fields.Notes}</div>` : ''}</div>
+    ${record.audio && settings.audioEnabled ? '<div class="audio-repair"><button id="regenerate-audio" class="text-button">Regenerate pronunciation</button><span class="help">New audio request · billed separately</span></div>' : ''}
     <details class="entry-details"><summary>Entry details</summary><p class="help">${escape(record.model)} · ${entry.meanings.length} meanings · ${entry.meanings.length * 2} examples${record.deck ? ' · Saved in ' + escape(record.deck) : ''}. Generated with AI.</p>${entry.notes ? `<p class="help">${escape(entry.notes)}</p>` : ''}${entry.coverage ? `<p class="help">${escape(entry.coverage)}</p>` : ''}${record.format !== 'compact' ? '<p class="help">This is an older entry. Make compact generates a shorter version using your API key. The existing Anki card changes only when you update it.</p>' : ''}</details>`;
   document.querySelectorAll('#preview button').forEach(el => { el.disabled = busy; });
   if (!settings.audioEnabled) { $('#play-audio').hidden = true; $('.preview-audio>span').textContent = 'Pronunciation off'; }
@@ -133,12 +134,16 @@ document.addEventListener('click', async event => {
     } catch (e) { notice(`${e.message} Your entry is saved in Your words; you can retry without generating it again.`, true); }
     finally { setBusy(false); }
   }
-  if (event.target.closest('#play-audio') && current && !busy) {
-    setBusy(true); player?.pause();
-    $('#play-audio').textContent = current.audio ? 'Loading audio…' : 'Generating pronunciation…';
+  if ((event.target.closest('#play-audio') || event.target.closest('#regenerate-audio')) && current && !busy) {
+    if (!await flushSettings()) return;
+    const regenerate = Boolean(event.target.closest('#regenerate-audio'));
+    setBusy(true); player?.pause(); notice('');
+    $('#play-audio').textContent = current.audio && !regenerate ? 'Loading audio…' : 'Generating pronunciation…';
     try {
-      const result = await api.audio(current.id); renderPreview(result.record); await refreshHistory();
+      const result = await api.audio(current.id, regenerate); renderPreview(result.record); await refreshHistory();
+      await window.AnkiAudio.checkRecording(result.src);
       player = new Audio(result.src); await player.play();
+      if (regenerate) notice(result.record.noteId ? 'Pronunciation regenerated. Use Update existing card to send the new audio to Anki.' : 'Pronunciation regenerated.');
     } catch (e) { notice(`Pronunciation: ${e.message}`, true); }
     finally { renderPreview(current); setBusy(false); }
   }

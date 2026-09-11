@@ -1,61 +1,410 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
-  <title>AnkiAdder</title>
-  <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="card.css">
-  <link rel="stylesheet" href="compact.css">
-  <link rel="stylesheet" href="costs.css">
-  <script src="card.js" defer></script>
-  <script src="pricing.js" defer></script>
-  <script src="editor.js" defer></script>
-  <script src="app.js" defer></script>
-</head>
-<body>
-  <aside class="sidebar">
-    <div class="brand"><span class="brand-mark">a<span>+</span></span><span>AnkiAdder</span></div>
-    <nav aria-label="Main navigation">
-      <button class="nav active" data-page="create"><span>＋</span> Add a word</button>
-      <button class="nav" data-page="history"><span>▤</span> Your words <span id="history-count" class="count">0</span></button>
-      <button class="nav" data-page="settings"><span>⚙</span> Settings</button>
-    </nav>
-    <div class="sidebar-bottom"><div class="connection"><span id="connection-dot" class="dot"></span><span id="connection-label">Checking Anki…</span></div><button id="reconnect" class="text-button">Check connection ↗</button></div>
-  </aside>
-  <main>
-    <div id="notice" role="status" aria-live="polite" hidden></div>
-    <section id="page-create" class="page">
-      <header><div class="eyebrow">YOUR DAILY DOSE OF LANGUAGE</div><h1>One word. A whole new world.</h1><p>From a word you found to a card you’ll remember.</p></header>
-      <div id="setup-banner" class="setup-banner" hidden><div><strong>Let’s make this yours.</strong><p>Add your API key and choose the language you’re learning.</p></div><button class="secondary" data-page="settings">Set up AnkiAdder →</button></div>
-      <form id="word-form" class="word-panel">
-        <div class="panel-top"><label for="word">What word caught your eye?</label><span id="language-badge" class="pill"></span></div>
-        <input id="word" name="word" placeholder="Type a word…" maxlength="200" autocomplete="off" required autofocus dir="auto">
-        <div class="word-panel-bottom"><div class="deck-controls"><label for="deck-select">Deck</label><select id="deck-select" aria-describedby="deck-help"></select><button type="button" id="refresh-decks" class="text-button" title="Refresh all decks from the open Anki profile">↻</button><button type="button" id="new-deck" class="text-button">+ New</button></div><div class="actions"><label class="audio-toggle"><input id="quick-audio" type="checkbox" role="switch" checked><span>Pronunciation</span></label><button id="cancel" type="button" class="text-button" hidden>Cancel</button><button id="generate" class="primary" type="submit">Create card <span>↗</span></button></div></div>
-        <div id="new-deck-row" hidden><label for="new-deck-name">New deck name</label><input id="new-deck-name" maxlength="200" placeholder="Language::Vocabulary"><button id="choose-new-deck" type="button" class="secondary">Use deck</button></div>
-        <p id="deck-help" class="help deck-help">Decks from the open Anki profile. Switch profiles in Anki, then refresh.</p>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>AnkiAdder</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="card.css" />
+    <link rel="stylesheet" href="compact.css" />
+    <link rel="stylesheet" href="costs.css" />
+    <script src="card.js" defer></script>
+    <script src="pricing.js" defer></script>
+    <script src="audio.js" defer></script>
+    <script src="editor.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">a<span>+</span></span
+        ><span>AnkiAdder</span>
+      </div>
+      <nav aria-label="Main navigation">
+        <button class="nav active" data-page="create">
+          <span>＋</span> Add a word
+        </button>
+        <button class="nav" data-page="history">
+          <span>▤</span> Your words
+          <span id="history-count" class="count">0</span>
+        </button>
+        <button class="nav" data-page="settings">
+          <span>⚙</span> Settings
+        </button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="connection">
+          <span id="connection-dot" class="dot"></span
+          ><span id="connection-label">Checking Anki…</span>
+        </div>
+        <button id="reconnect" class="text-button">Check connection ↗</button>
+      </div>
+    </aside>
+    <main>
+      <div id="notice" role="status" aria-live="polite" hidden></div>
+      <section id="page-create" class="page">
+        <div id="setup-banner" class="setup-banner" hidden>
+          <div>
+            <strong>Let’s make this yours.</strong>
+            <p>Add your API key and choose the language you’re learning.</p>
+          </div>
+          <button class="secondary" data-page="settings">
+            Set up AnkiAdder →
+          </button>
+        </div>
+        <form id="word-form" class="word-panel">
+          <div class="panel-top">
+            <label for="word" class="sr-only">Word</label
+            ><span id="language-badge" class="pill"></span>
+          </div>
+          <input
+            id="word"
+            name="word"
+            placeholder="Type a word…"
+            maxlength="200"
+            autocomplete="off"
+            required
+            autofocus
+            dir="auto"
+          />
+          <div class="word-panel-bottom">
+            <div class="deck-controls">
+              <label for="deck-select">Deck</label
+              ><select id="deck-select" aria-describedby="deck-help"></select
+              ><button
+                type="button"
+                id="refresh-decks"
+                class="text-button"
+                title="Refresh all decks from the open Anki profile"
+              >
+                ↻</button
+              ><button type="button" id="new-deck" class="text-button">
+                + New
+              </button>
+            </div>
+            <div class="actions">
+              <label class="audio-toggle"
+                ><input
+                  id="quick-audio"
+                  type="checkbox"
+                  role="switch"
+                  checked
+                /><span>Pronunciation</span></label
+              ><button id="cancel" type="button" class="text-button" hidden>
+                Cancel</button
+              ><button id="generate" class="primary" type="submit">
+                Create card <span>↗</span>
+              </button>
+            </div>
+          </div>
+          <div id="new-deck-row" hidden>
+            <label for="new-deck-name">New deck name</label
+            ><input
+              id="new-deck-name"
+              maxlength="200"
+              placeholder="Language::Vocabulary"
+            /><button id="choose-new-deck" type="button" class="secondary">
+              Use deck
+            </button>
+          </div>
+          <p id="deck-help" class="help deck-help">
+            Decks from the open Anki profile. Switch profiles in Anki, then
+            refresh.
+          </p>
+        </form>
+        <div id="cost-summary" class="cost-summary" role="status" hidden></div>
+        <div class="feature-row">
+          <span>✓ Key meanings & forms</span><span>✓ Two short examples</span
+          ><span>✓ Pronunciation audio</span>
+        </div>
+        <div id="loading" class="loading" role="status" hidden>
+          <span class="spinner"></span>
+          <div>
+            <strong>Preparing your card…</strong>
+            <p>Writing a short entry and preparing pronunciation audio.</p>
+          </div>
+        </div>
+        <div id="empty" class="empty">
+          <div class="card-art">
+            <div class="art-back"></div>
+            <div class="art-front">
+              <span>WORD BY WORD</span><strong>知る</strong
+              ><small>to know · to discover</small>
+            </div>
+            <span class="spark">✧</span>
+          </div>
+          <h2>Make curiosity a habit.</h2>
+          <p>
+            Your next discovery starts with a single word.<br />We’ll take care
+            of the flashcard.
+          </p>
+        </div>
+        <article id="preview" hidden></article>
+      </section>
+      <section id="page-history" class="page" hidden>
+        <label for="history-search" class="sr-only">Search your words</label
+        ><input
+          id="history-search"
+          placeholder="Search your words…"
+          type="search"
+        />
+        <div id="history-list"></div>
+      </section>
+      <section id="page-settings" class="page" hidden>
+        <form id="settings-form">
+          <section class="settings-card">
+            <h2><span>01</span> Your languages</h2>
+            <div class="form-grid">
+              <label
+                >Word language<input
+                  name="sourceLanguage"
+                  list="languages"
+                  required
+                  maxlength="80"
+                  placeholder="e.g. Spanish" /></label
+              ><label
+                >Definitions & translations in<input
+                  name="translationLanguage"
+                  list="languages"
+                  required
+                  maxlength="80"
+                  placeholder="e.g. English"
+              /></label>
+            </div>
+            <datalist id="languages">
+              <option>English</option>
+              <option>Spanish</option>
+              <option>French</option>
+              <option>German</option>
+              <option>Swedish</option>
+              <option>Italian</option>
+              <option>Portuguese</option>
+              <option>Japanese</option>
+              <option>Korean</option>
+              <option>Mandarin Chinese</option>
+              <option>Arabic</option>
+              <option>Russian</option>
+              <option>Hindi</option>
+              <option>Dutch</option>
+              <option>Finnish</option>
+              <option>Norwegian</option>
+              <option>Danish</option>
+              <option>Polish</option>
+              <option>Turkish</option>
+              <option>Latin</option>
+            </datalist>
+            <p class="help">
+              Type any language or regional variety, such as Brazilian
+              Portuguese.
+            </p>
+          </section>
+          <section class="settings-card">
+            <h2><span>02</span> OpenAI</h2>
+            <label
+              >API key<input
+                type="password"
+                name="apiKey"
+                autocomplete="off"
+                placeholder="Paste your OpenAI API key"
+                maxlength="2000"
+            /></label>
+            <div class="key-help">
+              <p class="help" id="key-status">
+                Your key is encrypted on this computer.
+              </p>
+              <button type="button" class="text-button" data-link="keys">
+                Get an API key ↗
+              </button>
+            </div>
+            <label class="check small"
+              ><input type="checkbox" name="clearApiKey" /> Remove saved API
+              key</label
+            ><label
+              >Model<input
+                name="model"
+                required
+                maxlength="100"
+                placeholder="gpt-5.6-luna"
+            /></label>
+            <p class="help">
+              Uses your OpenAI API account and its billing. A ChatGPT
+              subscription is separate. Words and language preferences are sent
+              to OpenAI when you create a card.
+            </p>
+          </section>
+          <section class="settings-card">
+            <h2><span>03</span> Anki connection</h2>
+            <p class="help">
+              Choose your destination deck on Add a word. All decks, including
+              subdecks and empty decks, are listed for the profile currently
+              open in Anki.
+            </p>
+            <div class="anki-setup">
+              <strong>Connect Anki in three steps</strong>
+              <ol>
+                <li>
+                  Install and open
+                  <button type="button" class="text-button" data-link="anki">
+                    Anki desktop ↗</button
+                  >.
+                </li>
+                <li>
+                  In Anki, go to Tools → Add-ons → Get Add-ons. Paste
+                  <code>2055492159</code> (<button
+                    type="button"
+                    class="text-button"
+                    data-link="addon"
+                  >
+                    AnkiConnect ↗</button
+                  >).
+                </li>
+                <li>Restart Anki and leave it running while adding words.</li>
+              </ol>
+              <button type="button" id="test-anki" class="secondary">
+                Test saved connection
+              </button>
+              <p id="anki-test-result" class="help" role="status"></p>
+            </div>
+            <details>
+              <summary>Advanced connection settings</summary>
+              <label
+                >AnkiConnect address<input
+                  name="ankiUrl"
+                  required
+                  placeholder="http://127.0.0.1:8765" /></label
+              ><label
+                >AnkiConnect API key (optional)<input
+                  type="password"
+                  name="ankiKey"
+                  autocomplete="off"
+                  placeholder="Only if configured in AnkiConnect"
+                  maxlength="2000" /></label
+              ><label class="check small"
+                ><input type="checkbox" name="clearAnkiKey" /> Remove saved
+                AnkiConnect key</label
+              >
+            </details>
+          </section>
+          <section class="settings-card">
+            <h2><span>04</span> Your cards</h2>
+            <p class="help">
+              Compact cards: all distinct common meanings, 2 short examples per
+              meaning, and one highlighted line of key forms. Near synonyms are
+              combined to keep API usage low. Words with many meanings may need
+              scrolling. AI can make mistakes.
+            </p>
+            <label
+              >Tags<input
+                name="tags"
+                placeholder="ankiadder vocabulary"
+              /><small class="help">Separate tags with spaces.</small></label
+            ><label class="check"
+              ><input type="checkbox" name="reverse" /><span
+                >Create a reverse card too<small
+                  >Practice recalling the word from its definitions.</small
+                ></span
+              ></label
+            ><label class="check"
+              ><input type="checkbox" name="autoAdd" /><span
+                >Automatically add after generation<small
+                  >Type a word and press Enter. Entries with flagged uncertainty
+                  pause for review.</small
+                ></span
+              ></label
+            >
+          </section>
+          <section class="settings-card">
+            <h2><span>05</span> Pronunciation</h2>
+            <label class="check"
+              ><input type="checkbox" name="audioEnabled" /><span
+                >Generate audio for each word<small
+                  >AI-generated pronunciation using your OpenAI key. Saved with
+                  your Anki card for offline playback and sync.</small
+                ></span
+              ></label
+            ><label
+              >Voice<select name="voice">
+                <option value="marin">Marin</option>
+                <option value="cedar">Cedar</option>
+                <option value="coral">Coral</option>
+                <option value="alloy">Alloy</option>
+                <option value="nova">Nova</option>
+                <option value="sage">Sage</option>
+              </select></label
+            >
+            <p class="help">
+              One short speech request per new word and voice, billed separately
+              from text generation. Replaying saved audio is free of API calls.
+              Changing voice applies to new recordings.
+            </p>
+          </section>
+          <section class="settings-card">
+            <h2><span>06</span> API costs</h2>
+            <label class="check"
+              ><input type="checkbox" name="showCosts" /><span
+                >Show the cost for each word<small
+                  >Show text, pronunciation and total estimates in USD beside
+                  your word entry. Turning this off hides the display; it does
+                  not change API usage.</small
+                ></span
+              ></label
+            >
+            <p id="pricing-info" class="help"></p>
+            <p class="help">
+              Before generation: an illustration using 1,000 input + 1,000
+              output text tokens, and 100 input + 75 output speech tokens.
+              Actual usage varies with the word and language. After generation:
+              estimates use the token counts returned by the API, including
+              reasoning and cached input. Saved audio costs $0 to replay.
+            </p>
+            <p class="help">
+              Estimates use standard prices checked September 11, 2026. They
+              exclude failed requests, retries without reported usage, taxes and
+              account-specific adjustments. Unknown usage or model prices are
+              shown as unavailable. Your OpenAI bill is authoritative.
+            </p>
+            <div class="pricing-links">
+              <button class="text-button" type="button" data-link="pricing">
+                OpenAI pricing ↗</button
+              ><button class="text-button" type="button" data-link="usage">
+                OpenAI usage & billing ↗
+              </button>
+            </div>
+          </section>
+          <div class="settings-footer">
+            <span class="help">Keys stay encrypted on this computer.</span
+            ><span id="settings-status" role="status" aria-live="polite"
+              >Changes save automatically.</span
+            >
+          </div>
+        </form>
+      </section>
+    </main>
+    <dialog id="entry-editor" aria-labelledby="editor-title">
+      <form id="editor-form">
+        <div class="editor-header">
+          <h2 id="editor-title">Edit card</h2>
+          <button type="button" id="editor-cancel" class="secondary">
+            Cancel
+          </button>
+        </div>
+        <p class="help">
+          Edits are free and saved in Your words. Update Anki to apply them to
+          an existing card.
+        </p>
+        <div id="editor-fields"></div>
+        <p id="editor-error" role="alert"></p>
+        <div class="editor-footer">
+          <button type="submit" class="secondary">Save changes</button
+          ><button type="submit" id="editor-update" class="primary">
+            Save &amp; update Anki
+          </button>
+        </div>
       </form>
-      <div id="cost-summary" class="cost-summary" role="status" hidden></div>
-      <div class="feature-row"><span>✓ Key meanings & forms</span><span>✓ Two short examples</span><span>✓ Pronunciation audio</span></div>
-      <div id="loading" class="loading" role="status" hidden><span class="spinner"></span><div><strong>Preparing your card…</strong><p>Writing a short entry and preparing pronunciation audio.</p></div></div>
-      <div id="empty" class="empty"><div class="card-art"><div class="art-back"></div><div class="art-front"><span>WORD BY WORD</span><strong>知る</strong><small>to know · to discover</small></div><span class="spark">✧</span></div><h2>Make curiosity a habit.</h2><p>Your next discovery starts with a single word.<br>We’ll take care of the flashcard.</p></div>
-      <article id="preview" hidden></article>
-    </section>
-    <section id="page-history" class="page" hidden><header><div class="eyebrow">YOUR GROWING VOCABULARY</div><h1>Words worth keeping.</h1><p>Revisit saved entries and send drafts to Anki without generating them again.</p></header><label for="history-search" class="sr-only">Search your words</label><input id="history-search" placeholder="Search your words…" type="search"><div id="history-list"></div></section>
-    <section id="page-settings" class="page" hidden>
-      <header><div class="eyebrow">MAKE IT YOURS</div><h1>A few small details.</h1><p>Set these once. Then just bring the words.</p></header>
-      <form id="settings-form">
-        <section class="settings-card"><h2><span>01</span> Your languages</h2><div class="form-grid"><label>Word language<input name="sourceLanguage" list="languages" required maxlength="80" placeholder="e.g. Spanish"></label><label>Definitions & translations in<input name="translationLanguage" list="languages" required maxlength="80" placeholder="e.g. English"></label></div><datalist id="languages"><option>English</option><option>Spanish</option><option>French</option><option>German</option><option>Swedish</option><option>Italian</option><option>Portuguese</option><option>Japanese</option><option>Korean</option><option>Mandarin Chinese</option><option>Arabic</option><option>Russian</option><option>Hindi</option><option>Dutch</option><option>Finnish</option><option>Norwegian</option><option>Danish</option><option>Polish</option><option>Turkish</option><option>Latin</option></datalist><p class="help">Type any language or regional variety, such as Brazilian Portuguese.</p></section>
-        <section class="settings-card"><h2><span>02</span> OpenAI</h2><label>API key<input type="password" name="apiKey" autocomplete="off" placeholder="Paste your OpenAI API key" maxlength="2000"></label><div class="key-help"><p class="help" id="key-status">Your key is encrypted on this computer.</p><button type="button" class="text-button" data-link="keys">Get an API key ↗</button></div><label class="check small"><input type="checkbox" name="clearApiKey"> Remove saved API key</label><label>Model<input name="model" required maxlength="100" placeholder="gpt-5.6-luna"></label><p class="help">Uses your OpenAI API account and its billing. A ChatGPT subscription is separate. Words and language preferences are sent to OpenAI when you create a card.</p></section>
-        <section class="settings-card"><h2><span>03</span> Anki connection</h2><p class="help">Choose your destination deck on Add a word. All decks, including subdecks and empty decks, are listed for the profile currently open in Anki.</p><div class="anki-setup"><strong>Connect Anki in three steps</strong><ol><li>Install and open <button type="button" class="text-button" data-link="anki">Anki desktop ↗</button>.</li><li>In Anki, go to Tools → Add-ons → Get Add-ons. Paste <code>2055492159</code> (<button type="button" class="text-button" data-link="addon">AnkiConnect ↗</button>).</li><li>Restart Anki and leave it running while adding words.</li></ol><button type="button" id="test-anki" class="secondary">Test saved connection</button><p id="anki-test-result" class="help" role="status"></p></div><details><summary>Advanced connection settings</summary><label>AnkiConnect address<input name="ankiUrl" required placeholder="http://127.0.0.1:8765"></label><label>AnkiConnect API key (optional)<input type="password" name="ankiKey" autocomplete="off" placeholder="Only if configured in AnkiConnect" maxlength="2000"></label><label class="check small"><input type="checkbox" name="clearAnkiKey"> Remove saved AnkiConnect key</label></details></section>
-        <section class="settings-card"><h2><span>04</span> Your cards</h2><p class="help">Compact cards: all distinct common meanings, 2 short examples per meaning, and one highlighted line of key forms. Near synonyms are combined to keep API usage low. Words with many meanings may need scrolling. AI can make mistakes.</p><label>Tags<input name="tags" placeholder="ankiadder vocabulary"><small class="help">Separate tags with spaces.</small></label><label class="check"><input type="checkbox" name="reverse"><span>Create a reverse card too<small>Practice recalling the word from its definitions.</small></span></label><label class="check"><input type="checkbox" name="autoAdd"><span>Automatically add after generation<small>Type a word and press Enter. Entries with flagged uncertainty pause for review.</small></span></label></section>
-        <section class="settings-card"><h2><span>05</span> Pronunciation</h2><label class="check"><input type="checkbox" name="audioEnabled"><span>Generate audio for each word<small>AI-generated pronunciation using your OpenAI key. Saved with your Anki card for offline playback and sync.</small></span></label><label>Voice<select name="voice"><option value="marin">Marin</option><option value="cedar">Cedar</option><option value="coral">Coral</option><option value="alloy">Alloy</option><option value="nova">Nova</option><option value="sage">Sage</option></select></label><p class="help">One short speech request per new word and voice, billed separately from text generation. Replaying saved audio is free of API calls. Changing voice applies to new recordings.</p></section>
-        <section class="settings-card"><h2><span>06</span> API costs</h2><label class="check"><input type="checkbox" name="showCosts"><span>Show the cost for each word<small>Show text, pronunciation and total estimates in USD beside your word entry. Turning this off hides the display; it does not change API usage.</small></span></label><p id="pricing-info" class="help"></p><p class="help">Before generation: an illustration using 1,000 input + 1,000 output text tokens, and 100 input + 75 output speech tokens. Actual usage varies with the word and language. After generation: estimates use the token counts returned by the API, including reasoning and cached input. Saved audio costs $0 to replay.</p><p class="help">Estimates use standard prices checked September 11, 2026. They exclude failed requests, retries without reported usage, taxes and account-specific adjustments. Unknown usage or model prices are shown as unavailable. Your OpenAI bill is authoritative.</p><div class="pricing-links"><button class="text-button" type="button" data-link="pricing">OpenAI pricing ↗</button><button class="text-button" type="button" data-link="usage">OpenAI usage & billing ↗</button></div></section>
-        <div class="settings-footer"><span class="help">Keys stay encrypted on this computer.</span><span id="settings-status" role="status" aria-live="polite">Changes save automatically.</span></div>
-      </form>
-    </section>
-  </main>
-  <dialog id="entry-editor" aria-labelledby="editor-title"><form id="editor-form"><div class="editor-header"><h2 id="editor-title">Edit card</h2><button type="button" id="editor-cancel" class="secondary">Cancel</button></div><p class="help">Edits are free and saved in Your words. Update Anki to apply them to an existing card.</p><div id="editor-fields"></div><p id="editor-error" role="alert"></p><div class="editor-footer"><button type="submit" class="secondary">Save changes</button><button type="submit" id="editor-update" class="primary">Save &amp; update Anki</button></div></form></dialog>
-</body>
+    </dialog>
+  </body>
 </html>

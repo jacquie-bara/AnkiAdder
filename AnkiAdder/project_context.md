@@ -2,6 +2,19 @@
 
 Updated 2026-09-11 for version 1.3.0. Workspace: C:\dev\AnkiAdder. No git repository or AGENTS.md was present during this session.
 
+## Mac follow-up (2026-09-11)
+
+Current workspace is `/Users/yiwang/Projects/ankiadder/AnkiAdder` on macOS 15, Apple Silicon, with git at the parent directory. Use the current shell/environment rather than the historical Windows workflow notes below. Existing user formatting changes in `src/ui/index.html` were preserved.
+
+- Removed the eyebrow, title and introductory paragraph from Add a word, Your words and Settings. Kept functional labels/help and restored a screen-reader label for the word input.
+- Shared card CSS now uses transparent backgrounds in both light and night mode. The next Anki add/update refreshes the shared note-type CSS for existing cards; background changes do not require regenerating entries.
+- Investigated the real cached `skum` MP3 read-only: 0.36 seconds, approximately -90 dB peak, effectively silence. Anki's media copy has the identical SHA256. Mac MP3 playback works with an audible fixture; this recording itself explains the reported silence in both apps.
+- Added `src/ui/audio.js` to decode/check playback for silence or corrupt audio and display an actionable error. Regenerate pronunciation makes one explicit paid speech request without regenerating text. It saves under a fresh filename, preserves prior files on failure, accumulates pronunciation receipts, and marks linked notes for Update existing card. Playback after reload uses the replacement filename without requesting speech again. Original live user files were not modified and no real API calls were made during verification.
+- UI tests use a locally generated tone (muted) for playback and a silent MP3 for rejection. Added regeneration failure/retry, receipt accumulation, persistence, no text regeneration and Anki audio upload checks, plus light/night transparency checks. 26 unit tests, Mac UI smoke and dedicated autosave checks passed. Packaged smoke now supports Mac and no longer depends on the removed heading.
+- Rebuilt the Apple Silicon DMG/ZIP in `release` (version remains 1.3.0) and passed the packaged Mac startup check with a temporary profile. Build with `CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:mac` to avoid automatically selecting a local signing certificate; the normal build stalled on certificate signing. No Developer ID signing/notarization was performed.
+
+Historical Windows context follows.
+
 ## Product and user preferences
 
 Cross-platform desktop app: type a word, generate a compact vocabulary entry using the user's OpenAI API key, review, and add to the running local Anki desktop app through AnkiConnect. Default text model is gpt-5.6-luna, editable in Settings. Default languages Spanish / English; preserve the user's saved settings. User studies multiple languages, including Swedish and Japanese.

@@ -19,13 +19,21 @@ function handle(channel, fn) {
     catch (e) { return { ok: false, error: e.name === 'AbortError' ? 'Generation cancelled.' : e.name === 'TimeoutError' ? 'Generation timed out. Please try again.' : e.message || 'Something went wrong. Please try again.' }; }
   });
 }
-async function attachAudio(record, signal) {
-  const audio = await audioCache.ensure(record.entry.lemma, record.sourceLanguage, record.audio?.voice || store.settings.voice, () => store.secret('apiKey'), signal);
+async function attachAudio(record, signal, regenerate = false) {
+  if (record.audio && !regenerate) {
+    try { await audioCache.read(record.audio.filename); return record; }
+    catch (e) { if (!e.message.includes('file is missing')) throw e; }
+  }
+  const audio = await audioCache.ensure(record.entry.lemma, record.sourceLanguage, record.audio?.voice || store.settings.voice, () => store.secret('apiKey'), signal, { regenerate: regenerate || Boolean(record.audio) });
   const previous = record.costs?.pronunciation;
   // Playback must not replace the original paid receipt with a $0 cache hit.
-  const cost = audio.cost.basis === 'cached' && record.audio ? (previous || calculate('gpt-4o-mini-tts', undefined)) : audio.cost;
+  let cost = audio.cost.basis === 'cached' && record.audio ? (previous || calculate('gpt-4o-mini-tts', undefined)) : audio.cost;
+  if (record.audio && previous && audio.cost.basis !== 'cached') {
+    const receipts = previous.receipts || [previous];
+    cost = { usd: previous.usd == null || audio.cost.usd == null ? null : previous.usd + audio.cost.usd, basis: 'requests', receipts: [...receipts, audio.cost] };
+  }
   const { cost: _cost, ...metadata } = audio;
-  return store.put({ ...record, audio: metadata, costs: { ...record.costs, pronunciation: cost } });
+  return store.put({ ...record, audio: metadata, costs: { ...record.costs, pronunciation: cost }, pendingAnkiChanges: record.pendingAnkiChanges || Boolean(record.noteId), audioInvalidated: false });
 }
 async function add(id, replaceExisting = false) {
   if (mutation) throw new Error('An operation is already in progress.');
@@ -95,14 +103,15 @@ app.whenReady().then(async () => {
   });
   handle('word:cancel', () => generation?.abort());
   handle('anki:add', add);
-  handle('word:audio', async id => {
+  handle('word:audio', async (id, regenerate = false) => {
+    if (typeof regenerate !== 'boolean') throw new Error('Invalid pronunciation request.');
     if (mutation || generation) throw new Error('Wait for the current operation before playing pronunciation.');
     if (!store.settings.audioEnabled) throw new Error('Turn on pronunciation to generate or play audio.');
     let record = store.history.find(item => item.id === id);
     if (!record) throw new Error('This entry could not be found.');
     mutation = true;
     try {
-      record = await attachAudio(record);
+      record = await attachAudio(record, undefined, regenerate);
       const audio = await audioCache.read(record.audio.filename);
       return { record, src: `data:audio/mpeg;base64,${audio.data}` };
     } finally { mutation = false; }

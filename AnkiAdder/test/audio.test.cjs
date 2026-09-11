@@ -34,6 +34,23 @@ test('speech events combine audio chunks and preserve usage for cost calculation
   assert.throws(() => parseSpeechEvents('data: {"type":"speech.audio.error"}\n\n'), /failed/);
 });
 
+test('regeneration bypasses cached silence without overwriting existing recordings', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ankiadder-audio-'));
+  try {
+    let calls = 0;
+    const cache = new AudioCache(dir, async () => ({ ok: true, arrayBuffer: async () => Buffer.from(`ID3recording-${++calls}`) }));
+    const original = await cache.ensure('skum', 'Swedish', 'marin', 'key');
+    const replacement = await cache.ensure('skum', 'Swedish', 'marin', 'key', undefined, { regenerate: true });
+    assert.equal(calls, 2);
+    assert.notEqual(replacement.filename, original.filename);
+    assert.equal(Buffer.from((await cache.read(original.filename)).data, 'base64').toString(), 'ID3recording-1');
+    assert.equal(Buffer.from((await cache.read(replacement.filename)).data, 'base64').toString(), 'ID3recording-2');
+    const failed = new AudioCache(dir, async () => ({ ok: false, status: 429 }));
+    await assert.rejects(failed.ensure('skum', 'Swedish', 'marin', 'key', undefined, { regenerate: true }), /quota/);
+    assert.equal((await cache.read(replacement.filename)).data, Buffer.from('ID3recording-2').toString('base64'));
+  } finally { await fs.rm(dir, { recursive: true, force: true }); }
+});
+
 test('audio rejects bad bytes, failed requests, cancellation and path traversal', async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ankiadder-audio-'));
   const invalid = new AudioCache(dir, async () => ({ ok: true, arrayBuffer: async () => Buffer.from('not an mp3') }));

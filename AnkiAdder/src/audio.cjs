@@ -1,6 +1,6 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { createHash } = require('node:crypto');
+const { createHash, randomUUID } = require('node:crypto');
 const MODEL = 'gpt-4o-mini-tts';
 const { calculate, zero } = require('./ui/pricing.js');
 
@@ -23,8 +23,10 @@ function parseSpeechEvents(text) {
 
 class AudioCache {
   constructor(directory, fetchImpl = (...args) => fetch(...args)) { this.directory = path.join(directory, 'audio'); this.fetch = fetchImpl; }
-  filename(word, language, voice) {
-    const hash = createHash('sha256').update(JSON.stringify([MODEL, voice, language.trim().toLowerCase(), word.normalize('NFC').trim(), 'pronunciation-v1'])).digest('hex');
+  filename(word, language, voice, revision) {
+    const identity = [MODEL, voice, language.trim().toLowerCase(), word.normalize('NFC').trim(), 'pronunciation-v1'];
+    if (revision) identity.push(revision);
+    const hash = createHash('sha256').update(JSON.stringify(identity)).digest('hex');
     return `ankiadder-${hash}.mp3`;
   }
   file(filename) {
@@ -38,9 +40,10 @@ class AudioCache {
     if (!data.length || data.length > 5_000_000) throw new Error('Pronunciation file is invalid.');
     return { filename, data: data.toString('base64') };
   }
-  async ensure(word, language, voice, apiKey, signal) {
+  async ensure(word, language, voice, apiKey, signal, { regenerate = false } = {}) {
     signal?.throwIfAborted();
-    const filename = this.filename(word, language, voice);
+    // A new filename keeps other history entries and Anki's media cache intact.
+    const filename = this.filename(word, language, voice, regenerate ? randomUUID() : undefined);
     try { await this.read(filename); return { filename, voice, model: MODEL, cost: zero('cached') }; }
     catch (e) { if (!e.message.includes('file is missing')) throw e; }
     if (typeof apiKey === 'function') apiKey = apiKey();

@@ -9,8 +9,8 @@ const { FIELDS, buildNote, DEFAULTS, CARD_TEMPLATES, CARD_CSS } = require('../sr
   const output = path.resolve('test-output'); await fs.mkdir(output, { recursive: true });
   const directory = await fs.mkdtemp(path.join(output, 'profile-'));
   const env = { ...process.env, ANKIADDER_TEST_DATA: directory }; delete env.ELECTRON_RUN_AS_NODE;
-  // A quarter-second of silence, generated locally with FFmpeg, tests real MP3 decoding.
-  const audioBytes = (await fs.readFile(path.join(__dirname, 'silence.mp3'))).toString('base64');
+  // A short tone, generated locally with FFmpeg, tests real MP3 decoding (muted).
+  const audioBytes = (await fs.readFile(path.join(__dirname, 'tone.mp3'))).toString('base64');
   const app = await electron.launch({ args: ['.', '--smoke-test'], env });
   const errors = [];
   try {
@@ -30,6 +30,12 @@ const { FIELDS, buildNote, DEFAULTS, CARD_TEMPLATES, CARD_CSS } = require('../sr
       };
     }, { fixture, fields: FIELDS, audioBytes });
     const page = await app.firstWindow(); page.setDefaultTimeout(15000); page.on('pageerror', e => { errors.push(e.message); console.error('Renderer error:',e.message); });
+    await page.waitForFunction(() => Boolean(window.AnkiAudio));
+    const silence = (await fs.readFile(path.join(__dirname, 'silence.mp3'))).toString('base64');
+    assert.match(await page.evaluate(async bytes => {
+      try { await window.AnkiAudio.checkRecording(`data:audio/mpeg;base64,${bytes}`); return ''; }
+      catch (error) { return error.message; }
+    }, silence), /recording is silent/);
     await page.locator('.nav[data-page=settings]').click();
     await page.locator('[name=apiKey]').fill('sk-ui-test-secret');
     assert.equal(await page.locator('[name=model]').inputValue(), 'gpt-5.6-luna');
@@ -150,6 +156,36 @@ const { FIELDS, buildNote, DEFAULTS, CARD_TEMPLATES, CARD_CSS } = require('../sr
     await page.reload();
     await page.waitForFunction(() => document.querySelector('#quick-audio').checked === false);
     assert.equal(await page.locator('#cost-summary').isVisible(), false);
+    // Replace a saved recording without regenerating text, then persist and upload it.
+    await page.locator('#quick-audio').check();
+    await page.waitForFunction(() => !document.querySelector('#quick-audio').disabled);
+    await page.locator('.nav[data-page=history]').click();
+    await page.locator(`[data-record="${original.id}"]`).click();
+    const beforeRepair = (await page.evaluate(() => window.ankiAdder.history())).find(r => r.id === original.id);
+    const textRequests = await app.evaluate(() => globalThis.testCalls.filter(c => c.model === 'gpt-5.6-luna').length);
+    await app.evaluate(() => { globalThis.testOffline = false; globalThis.testSpeechFail = true; });
+    await page.locator('#regenerate-audio').click();
+    await page.waitForFunction(() => document.querySelector('#notice').textContent.includes('speech quota'));
+    assert.deepEqual((await page.evaluate(() => window.ankiAdder.history())).find(r => r.id === original.id).audio, beforeRepair.audio);
+    await app.evaluate(() => { globalThis.testSpeechFail = false; });
+    await page.locator('#regenerate-audio').click();
+    await page.waitForFunction(() => document.querySelector('#notice').textContent.includes('Pronunciation regenerated'));
+    const repaired = (await page.evaluate(() => window.ankiAdder.history())).find(r => r.id === original.id);
+    assert.notEqual(repaired.audio.filename, beforeRepair.audio.filename);
+    assert.equal(repaired.costs.pronunciation.usd, beforeRepair.costs.pronunciation.usd + 0.00096);
+    assert(repaired.pendingAnkiChanges);
+    assert.equal(await app.evaluate(() => globalThis.testCalls.filter(c => c.model === 'gpt-5.6-luna').length), textRequests);
+    const repairSpeechCalls = await app.evaluate(() => globalThis.testCalls.filter(c => c.model === 'gpt-4o-mini-tts').length);
+    await page.reload();
+    await page.locator('.nav[data-page=history]').click();
+    await page.locator(`[data-record="${original.id}"]`).click();
+    const replay = await page.evaluate(id => window.ankiAdder.audio(id), original.id);
+    assert.equal(replay.record.audio.filename, repaired.audio.filename);
+    assert.equal(replay.record.costs.pronunciation.usd, repaired.costs.pronunciation.usd);
+    assert.equal(await app.evaluate(() => globalThis.testCalls.filter(c => c.model === 'gpt-4o-mini-tts').length), repairSpeechCalls);
+    await page.locator('#update-note').click();
+    await page.getByText('Updated in Anki. Your review history is preserved.').waitFor();
+    assert.equal(await app.evaluate(() => globalThis.testFields.Audio), `[sound:${repaired.audio.filename}]`);
     // Render the actual Anki back template with the same fields/styles at 1000×760.
     const note = buildNote(fixture, { ...DEFAULTS, sourceLanguage: 'Swedish' });
     let back = CARD_TEMPLATES[0].Back.replace(/{{#(\w+)}}([\s\S]*?){{\/\1}}/g, (_match, key, content) => note.fields[key] ? content : '');
@@ -159,6 +195,14 @@ const { FIELDS, buildNote, DEFAULTS, CARD_TEMPLATES, CARD_CSS } = require('../sr
     const browserPage = await previewWindow; await browserPage.setViewportSize({ width: 1000, height: 760 });
     await browserPage.setContent(`<html><head><meta charset="utf-8"><style>${CARD_CSS}</style></head><body class="card">${back}</body></html>`);
     assert(await browserPage.evaluate(() => document.documentElement.scrollHeight <= innerHeight), 'Actual Anki card must fit one desktop screen');
+    for (const night of [false, true]) {
+      assert.deepEqual(await browserPage.evaluate(night => {
+        document.body.classList.toggle('nightMode', night);
+        document.documentElement.style.background = night ? '#303030' : '#e4e8ee';
+        return [document.body, document.querySelector('.vocab-card')].map(el => getComputedStyle(el).backgroundColor);
+      }, night), ['rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)']);
+    }
+    await browserPage.evaluate(() => { document.body.classList.remove('nightMode'); document.documentElement.style.background = '#e4e8ee'; });
     await browserPage.screenshot({ path: path.join(output, 'anki-compact-card.png') }); await browserPage.close();
     console.log('Desktop smoke passed: compact screen fit, full deck picker, autosave, history edits, free Anki updates, real MP3 playback, cached audio, speech failure recovery, offline drafts, reload.');
   } finally { await app.close(); }
