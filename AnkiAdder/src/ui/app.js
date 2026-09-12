@@ -3,12 +3,25 @@ const $ = selector => document.querySelector(selector);
 const escape = window.AnkiCard.escapeHtml;
 const pricing = window.AnkiPricing;
 let settings, history = [], current, busy = false, player, decks = [];
+let historyIds = [];
+let previewDeck, membershipRequest = 0;
 let settingsTimer, settingsDirty = false, settingsSave, settingsRevision = 0;
 let batchState = { status: 'idle', items: [] }, batchTimer;
 const batchActive = () => ['running', 'stopping'].includes(batchState.status);
 
 function notice(message, error = false) { $('#notice').textContent = message; $('#notice').classList.toggle('error', error); $('#notice').hidden = !message; }
-function page(name) {
+function page(name, historyDetail = false) {
+  if (name === 'create') {
+    historyIds = [];
+    $('#page-create').insertBefore($('#cost-summary'), $('#page-create .feature-row'));
+    $('#page-create').append($('#preview'));
+  }
+  if (name === 'history') {
+    $('#history-browser').hidden = historyDetail;
+    $('#history-detail').hidden = !historyDetail;
+    if (historyDetail) $('#history-detail').append($('#cost-summary'), $('#preview'));
+    else historyIds = [];
+  }
   document.querySelectorAll('.page').forEach(el => { el.hidden = el.id !== `page-${name}`; });
   document.querySelectorAll('.nav').forEach(el => el.classList.toggle('active', el.dataset.page === name));
   if (name === 'history') renderHistory();
@@ -19,13 +32,14 @@ function setBusy(value, generating = false) {
   busy = value;
   $('#generate').disabled = value; $('#word').disabled = value;
   $('#quick-audio').disabled = value;
-  document.querySelectorAll('#settings-form input, #settings-form select, #preview button, .deck-controls button, .deck-controls select, #choose-new-deck').forEach(el => { el.disabled = value; });
+  document.querySelectorAll('#settings-form input, #settings-form select, #preview button, #preview select, #history-list button, #history-navigation button, .deck-controls button, .deck-controls select, #choose-new-deck').forEach(el => { el.disabled = value; });
   $('#loading').hidden = !generating; $('#cancel').hidden = !generating;
   $('#generate').textContent = generating ? 'Creating…' : settings?.autoAdd ? 'Create & add ↗' : 'Create card ↗';
   $('#empty').hidden = generating || Boolean(current);
   $('#batch-words').disabled = value;
   $('#batch-start').disabled = value || batchState.items.some(item => item.status === 'pending');
   $('#batch-resume').disabled = value; $('#batch-retry').disabled = value;
+  updateHistoryNavigation();
 }
 function fillSettings(updateForm = true) {
   const form = $('#settings-form');
@@ -58,7 +72,7 @@ function renderCosts() {
   const audioLabel = costs.pronunciation?.basis === 'cached' ? ' (cached)' : costs.pronunciation?.basis === 'off' ? ' (off)' : '';
   const total = costs.text?.usd != null && costs.pronunciation?.usd != null ? pricing.amount({ usd: costs.text.usd + costs.pronunciation.usd }) : 'unavailable';
   box.textContent = `${forCurrent ? `“${current.entry.lemma}”` : 'Next word'} · estimated USD: Text ${pricing.amount(costs.text)} · Pronunciation ${pricing.amount(costs.pronunciation)}${audioLabel} · Total ${total}`;
-  box.title = forCurrent ? 'Based on reported API usage and saved standard rates. Not an invoice; excludes unreported failed requests. Replaying or re-adding this entry has no new API cost when its audio is cached.' : 'Illustrative estimate: 1,000 input + 1,000 output text tokens; 100 input + 75 output speech tokens. Actual usage varies. See Settings → API costs.';
+  box.title = forCurrent ? 'Cumulative reported API usage for this entry, including text regeneration, at saved standard rates. Not an invoice; excludes unreported failed requests. Replaying or re-adding with cached audio has no new API cost.' : 'Illustrative estimate: generation 1,000 input + 1,000 output tokens; review 2,000 input + 1,000 output tokens; speech 100 input + 75 output tokens. Actual usage varies. See Settings → API costs.';
 }
 async function checkAnki() {
   $('#connection-label').textContent = 'Checking Anki…';
@@ -73,14 +87,39 @@ async function checkAnki() {
     $('#anki-test-result').textContent = e.message;
     $('#deck-help').textContent = 'Deck list unavailable. Open Anki and refresh; saved deck names are kept.';
   }
+  if (current) void refreshMembership();
 }
 async function refreshHistory() { history = await api.history(); $('#history-count').textContent = history.length; renderHistory(); }
-function renderHistory() {
+function filteredHistory() {
   const search = $('#history-search').value.trim().toLocaleLowerCase();
-  const items = history.filter(r => `${r.entry.lemma} ${r.entry.word} ${r.sourceLanguage}`.toLocaleLowerCase().includes(search));
-  $('#history-list').innerHTML = items.length ? items.map(r => `<button class="history-row" data-record="${escape(r.id)}"><span><strong dir="auto">${escape(r.entry.lemma)}</strong><small>${escape(r.sourceLanguage)} → ${escape(r.translationLanguage)} · ${r.entry.meanings.length} meanings · ${escape(new Date(r.createdAt).toLocaleDateString())}</small></span><span class="history-status">${r.pendingAnkiChanges ? 'Edited · update Anki →' : r.status === 'draft' ? 'Draft · review →' : 'In Anki · view →'}</span></button>`).join('') : '<div class="empty"><h2>No words here yet.</h2><p>Your generated entries will appear here.</p></div>';
+  return history.filter(r => `${r.entry.lemma} ${r.entry.word} ${r.sourceLanguage}`.toLocaleLowerCase().includes(search));
+}
+function renderHistory() {
+  const items = filteredHistory();
+  $('#history-list').innerHTML = items.length ? items.map(r => `<div class="history-item"><button class="history-row" data-record="${escape(r.id)}" ${busy ? 'disabled' : ''}><span><strong dir="auto">${escape(r.entry.lemma)}</strong><small>${escape(r.sourceLanguage)} → ${escape(r.translationLanguage)} · ${r.entry.meanings.length} meanings · ${escape(new Date(r.createdAt).toLocaleDateString())}</small></span><span class="history-status">${r.pendingAnkiChanges ? 'Edited · update Anki →' : r.status === 'draft' ? 'Draft · review →' : 'In Anki · view →'}</span></button><button class="text-button delete-history" data-delete="${escape(r.id)}" aria-label="Delete ${escape(r.entry.lemma)} from history" ${busy ? 'disabled' : ''}>Delete</button></div>`).join('') : '<div class="empty"><h2>No words here yet.</h2><p>Your generated entries will appear here.</p></div>';
+  updateHistoryNavigation();
+}
+function updateHistoryNavigation() {
+  const index = historyIds.indexOf(current?.id);
+  $('#history-position').textContent = index < 0 ? '' : `${index + 1} / ${historyIds.length}`;
+  $('#history-previous').disabled = busy || index <= 0;
+  $('#history-next').disabled = busy || index < 0 || index >= historyIds.length - 1;
+}
+function openHistoryRecord(record, ids = historyIds) {
+  historyIds = ids;
+  player?.pause(); notice(''); $('#word').value = record.entry.lemma;
+  page('history', true); renderPreview(record);
+  const heading = $('#preview .word-heading'); heading.tabIndex = -1; heading.focus({ preventScroll: true });
+}
+function moveHistory(direction) {
+  if (busy || $('#page-history').hidden || $('#history-detail').hidden) return;
+  const index = historyIds.indexOf(current?.id);
+  if (index < 0) return;
+  const record = history.find(item => item.id === historyIds[index + direction]);
+  if (record) openHistoryRecord(record);
 }
 function renderPreview(record) {
+  if (current?.id !== record.id) previewDeck = settings.deck;
   current = record;
   const entry = record.entry, fields = window.AnkiCard.cardFields(entry);
   $('#empty').hidden = true; $('#preview').hidden = false;
@@ -89,11 +128,75 @@ function renderPreview(record) {
     ${record.pendingAnkiChanges ? '<p class="help">Changes saved locally. Update existing card to apply them in Anki.</p>' : ''}
     ${record.status === 'duplicate' ? '<p class="help">Update existing card replaces its text and audio with this preview, keeping its deck and review history.</p>' : ''}
     <div class="vocab-card preview-sheet"><h2 class="word-heading" dir="auto">${fields.Word}</h2><div class="preview-audio"><button id="play-audio" class="text-button" title="AI-generated pronunciation">${record.audio ? '▶ Play pronunciation' : '＋ Generate pronunciation'}</button><span>AI voice${entry.pronunciation ? ' · ' + escape(entry.pronunciation) : ''}</span></div><hr>${fields.Definitions}${fields.Forms}${fields.Meanings}${fields.Notes ? `<div class="card-warning">${fields.Notes}</div>` : ''}</div>
+    <div class="text-regeneration"><button id="regenerate-text" class="text-button">Regenerate text only</button><button id="cancel-text" class="secondary" hidden>Cancel</button><span class="help">New text generation & review · keeps pronunciation</span></div>
     ${record.audio && settings.audioEnabled ? '<div class="audio-repair"><button id="regenerate-audio" class="text-button">Regenerate pronunciation</button><span class="help">New audio request · billed separately</span></div>' : ''}
-    <details class="entry-details"><summary>Entry details</summary><p class="help">${escape(record.model)} · ${entry.meanings.length} meanings · ${entry.meanings.length * 2} examples${record.deck ? ' · Saved in ' + escape(record.deck) : ''}. Generated with AI.</p>${entry.notes ? `<p class="help">${escape(entry.notes)}</p>` : ''}${entry.coverage ? `<p class="help">${escape(entry.coverage)}</p>` : ''}${record.format !== 'compact' ? '<p class="help">This is an older entry. Make compact generates a shorter version using your API key. The existing Anki card changes only when you update it.</p>' : ''}</details>`;
+    <details class="entry-details"><summary>Entry details</summary><p class="help">${escape(record.model)} · ${entry.meanings.length} meanings · ${entry.meanings.length * 2} examples. Generated with AI.</p>${entry.notes ? `<p class="help">${escape(entry.notes)}</p>` : ''}${entry.coverage ? `<p class="help">${escape(entry.coverage)}</p>` : ''}</details>
+    <div class="history-actions"><button class="text-button" data-delete="${escape(record.id)}">Delete from history</button><span class="help">Anki cards are kept.</span></div>`;
+  const deckPanel = document.createElement('div'); deckPanel.className = 'preview-decks';
+  deckPanel.innerHTML = '<div class="deck-controls"><label for="preview-deck">Add to deck</label><select id="preview-deck"></select><button id="refresh-entry-decks" class="text-button">↻ Refresh</button></div><div id="entry-membership" class="help" role="status">Checking decks in the open Anki profile…</div><p class="help">Adding to another deck creates a separate card. Update existing card updates all linked copies, keeping their decks and review history.</p>';
+  if (historyIds.length) $('#preview .preview-toolbar').after(deckPanel);
+  else $('#preview .entry-details').append(deckPanel);
+  renderPreviewDecks(); void refreshMembership();
+  for (const kind of ['text', 'audio']) {
+    if (!record[`${kind}Versions`]?.length) continue;
+    const button = document.createElement('button'); button.className = 'secondary'; button.dataset.restore = kind;
+    button.textContent = `Undo ${kind === 'audio' ? 'pronunciation' : 'text'} regeneration`;
+    (kind === 'text' ? $('#preview .text-regeneration') : $('#preview .audio-repair') || $('#preview .history-actions')).append(button);
+  }
   document.querySelectorAll('#preview button').forEach(el => { el.disabled = busy; });
   if (!settings.audioEnabled) { $('#play-audio').hidden = true; $('.preview-audio>span').textContent = 'Pronunciation off'; }
   renderCosts();
+  updateHistoryNavigation();
+}
+function renderPreviewDecks() {
+  if (!$('#preview-deck')) return;
+  previewDeck ||= settings.deck;
+  $('#preview-deck').replaceChildren(...[...new Set([previewDeck, ...decks])].map(name => { const option = document.createElement('option'); option.value = name; option.textContent = name; return option; }));
+  $('#preview-deck').value = previewDeck; $('#preview-deck').disabled = busy;
+}
+async function refreshMembership() {
+  if (!current) return;
+  const request = ++membershipRequest, id = current.id;
+  try {
+    const names = await api.entryDecks(id);
+    if (request !== membershipRequest || current?.id !== id || !$('#entry-membership')) return;
+    const box = $('#entry-membership'); box.replaceChildren();
+    box.append(document.createTextNode(names.length ? 'Currently in these decks (open Anki profile):' : 'Not in any deck in the open Anki profile.'));
+    if (names.length) { const list = document.createElement('ul'); for (const name of names) { const item = document.createElement('li'); item.textContent = name; list.append(item); } box.append(list); }
+  } catch (error) {
+    if (request === membershipRequest && current?.id === id && $('#entry-membership')) $('#entry-membership').textContent = `Current decks unavailable. ${error.message}`;
+  }
+}
+async function deleteHistory(id) {
+  if (busy) return;
+  const record = history.find(item => item.id === id);
+  if (!record || !window.confirm(`Delete “${record.entry.lemma}” from Your words? This removes its local definitions and saved versions. Its Anki cards are kept.`)) return;
+  const index = historyIds.indexOf(id);
+  setBusy(true); player?.pause();
+  try {
+    await api.deleteHistory(id); historyIds = historyIds.filter(item => item !== id);
+    await refreshHistory();
+    if (current?.id === id) {
+      const next = history.find(item => item.id === historyIds[Math.min(index, historyIds.length - 1)]);
+      current = undefined; $('#preview').hidden = true;
+      if (next) openHistoryRecord(next); else { page('history'); renderCosts(); }
+    }
+    notice('Deleted from Your words. Anki cards were kept.');
+  } catch (error) { notice(error.message, true); }
+  finally { setBusy(false); }
+}
+async function regenerateText() {
+  if (busy || !current || !await flushSettings()) return;
+  const id = current.id;
+  player?.pause(); setBusy(true); notice('Regenerating and reviewing text. Keeping your pronunciation…');
+  $('#regenerate-text').textContent = 'Regenerating…';
+  $('#cancel-text').hidden = false; $('#cancel-text').disabled = false;
+  try {
+    const record = await api.regenerateText(id);
+    renderPreview(record); await refreshHistory();
+    notice(record.noteId ? 'Text regenerated; pronunciation kept. Use Update existing card to apply the text in Anki.' : 'Text regenerated; pronunciation kept.');
+  } catch (error) { notice(`${error.message} Your previous entry has been kept.`, true); }
+  finally { renderPreview(current); setBusy(false); }
 }
 async function generate(word) {
   if (busy || !word || !await flushSettings()) return;
@@ -107,9 +210,25 @@ async function generate(word) {
   finally { setBusy(false); $('#word').focus(); $('#word').select(); }
 }
 document.addEventListener('click', async event => {
+  const deletion = event.target.closest('[data-delete]'); if (deletion) { await deleteHistory(deletion.dataset.delete); return; }
+  const restore = event.target.closest('[data-restore]');
+  if (restore && current && !busy) {
+    setBusy(true); player?.pause();
+    try { renderPreview(await api.restore(current.id, restore.dataset.restore)); await refreshHistory(); notice('Previous version restored. API costs are unchanged. Update existing card to apply it in Anki.'); }
+    catch (error) { notice(error.message, true); } finally { setBusy(false); }
+  }
+  if (event.target.closest('#refresh-entry-decks') && !busy) { await checkAnki(); await refreshMembership(); }
   const navigation = event.target.closest('[data-page]'); if (navigation) { if (!await flushSettings()) return; page(navigation.dataset.page); }
   const link = event.target.closest('[data-link]'); if (link) { try { await api.openLink(link.dataset.link); } catch (e) { notice(e.message, true); } }
-  const item = event.target.closest('[data-record]'); if (item && !busy) { const r = history.find(r => r.id === item.dataset.record); if (r) { player?.pause(); $('#word').value = r.entry.lemma; renderPreview(r); page('create'); } }
+  const item = event.target.closest('[data-record]'); if (item && !busy) {
+    const record = history.find(r => r.id === item.dataset.record);
+    if (record) openHistoryRecord(record, (item.closest('#history-list') ? filteredHistory() : history).map(r => r.id));
+  }
+  if (event.target.closest('#history-back') && !busy) { page('history'); $('#history-search').focus(); }
+  if (event.target.closest('#history-previous')) moveHistory(-1);
+  if (event.target.closest('#history-next')) moveHistory(1);
+  if (event.target.closest('#regenerate-text')) await regenerateText();
+  if (event.target.closest('#cancel-text')) { try { await api.cancel(); } catch (error) { notice(error.message, true); } }
   if (event.target.closest('#edit-entry') && current && !busy) {
     if (!await flushSettings()) return;
     player?.pause();
@@ -126,18 +245,15 @@ document.addEventListener('click', async event => {
     });
   }
   if (event.target.closest('#compact-entry') && current && !busy) {
-    if (settings.sourceLanguage !== current.sourceLanguage || settings.translationLanguage !== current.translationLanguage) {
-      notice(`Set languages to ${current.sourceLanguage} → ${current.translationLanguage} in Settings before regenerating this entry.`, true); return;
-    }
-    $('#word').value = current.entry.lemma; await generate(current.entry.lemma);
+    await regenerateText();
   }
   if ((event.target.closest('#add-note') || event.target.closest('#update-note')) && current && !busy) {
     if (!await flushSettings()) return;
     const replace = Boolean(event.target.closest('#update-note'));
     setBusy(true); notice(replace ? 'Updating your Anki card…' : 'Adding to Anki…');
     try {
-      const record = await api.add(current.id, replace); renderPreview(record); await refreshHistory();
-      notice(record.status === 'duplicate' ? 'This word is already in Anki. Use Update existing card to replace it with this preview.' : record.status === 'updated' ? 'Updated in Anki. Your review history is preserved.' : 'Added to Anki. Your next word is waiting.');
+      const record = await api.add(current.id, replace, historyIds.length ? previewDeck : settings.deck); renderPreview(record); await refreshHistory();
+      notice(record.status === 'duplicate' ? 'This word is already in the selected deck. Use Update existing card to replace its content.' : record.status === 'updated' ? 'Updated in Anki. Your review history is preserved.' : 'Added to the selected Anki deck.');
     } catch (e) { notice(`${e.message} Your entry is saved in Your words; you can retry without generating it again.`, true); }
     finally { setBusy(false); }
   }
@@ -154,6 +270,12 @@ document.addEventListener('click', async event => {
     } catch (e) { notice(`Pronunciation: ${e.message}`, true); }
     finally { renderPreview(current); setBusy(false); }
   }
+});
+document.addEventListener('keydown', event => {
+  if (!['ArrowLeft', 'ArrowRight'].includes(event.key) || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing || event.defaultPrevented || busy || document.querySelector('dialog[open]')) return;
+  if (event.target.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="slider"]')) return;
+  if ($('#page-history').hidden || $('#history-detail').hidden) return;
+  event.preventDefault(); moveHistory(event.key === 'ArrowLeft' ? -1 : 1);
 });
 $('#word-form').addEventListener('submit', async event => { event.preventDefault(); await generate($('#word').value.trim()); });
 $('#cancel').addEventListener('click', async () => { try { await api.cancel(); } catch (e) { notice(e.message, true); } });
@@ -193,7 +315,8 @@ async function flushSettings() {
 $('#settings-form').addEventListener('input', scheduleSettings);
 $('#settings-form').addEventListener('change', scheduleSettings);
 $('#settings-form').addEventListener('submit', async event => { event.preventDefault(); await flushSettings(); });
-function setDecks(names) { decks = names; renderDecks(); }
+document.addEventListener('change', event => { if (event.target.id === 'preview-deck') previewDeck = event.target.value; });
+function setDecks(names) { decks = names; renderDecks(); renderPreviewDecks(); }
 function renderDecks() {
   const names = decks.includes(settings.deck) ? decks : [settings.deck, ...decks];
   for (const selector of ['#deck-select', '#batch-deck']) {

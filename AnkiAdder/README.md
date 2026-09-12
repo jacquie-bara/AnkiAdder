@@ -16,6 +16,12 @@ A desktop app for Windows and macOS. Enter a word to create a compact card with 
 
 Any language name or variety can be typed in Settings. Cards use a compact format designed for one desktop screen: brief definitions, two short examples each, and at most six principal forms instead of full conjugation tables. For Swedish verbs this means the infinitive, present, past, perfect, applicable participle, and imperative. Rare senses are intentionally omitted. Smaller windows, longer scripts, or larger text sizes may still require scrolling. AI can make mistakes; model-reported uncertainties remain visible.
 
+You can also enter a phrase or sentence (up to 200 characters). Generation identifies the main meaningful verb, retaining particles and reflexive components. Dictionary expressions allow natural inflections, reflexive pronouns and intervening objects: **att lägga öde → Kriget lade byn öde**. Explicitly inflected input and full sentences still retain their supplied form in one example. The language editor checks that examples use the intended construction and illustrate their definitions. Existing saved cards keep their text until edited or regenerated and explicitly updated in Anki.
+
+Swedish input is checked against [Lexin](https://lexin.nada.kth.se/lexin/) before generation. Exact headword and inflection matches provide dictionary evidence, including participles such as **urdrucken → dricka ur**. Spelling suggestions are not treated as matches. If Lexin is unavailable or has no match, the app continues with model generation; dictionary absence does not prove that a word is invalid.
+
+Every new entry then receives a separate language-review request using your selected model. The reviewer corrects grammatical roles, verb forms, agreement, pronouns, contextual examples and translations before the entry can be saved or pronounced. For Swedish phrases without a direct match, Lexin is also queried for the extracted lemma to ground that review. A failed review produces no saved card; unresolved warnings pause automatic addition. This adds a second paid text request and extra generation time. Both receipts are included in the displayed text cost. Review reduces errors but does not guarantee correctness; saved cards and manual edits are not automatically re-reviewed.
+
 **Version 1.1:** existing language, key, model, and deck settings are retained. Older comprehensive/everyday preferences automatically become compact. Pronunciation is enabled by default and can be disabled in Settings.
 
 The API key must be an **OpenAI Platform API key**, with API billing and access to the selected model. ChatGPT subscriptions are billed separately from API usage. [Create an API key](https://platform.openai.com/api-keys). No key is included in this project.
@@ -55,7 +61,7 @@ Run `npm run test:batch` for isolated desktop checks of automatic additions, fai
 - One Anki note per lemma and source/translation-language pair, using a dedicated **AnkiAdder Vocabulary v1** note type.
 - The forward card shows the word, part of speech, and pronunciation. The back has a brief meaning list, a highlighted line of key forms, and two examples per meaning. Citation markers such as `[1,2]` are removed.
 - Optional reverse cards show definitions first, with the word, examples, and forms on the back.
-- A deck is created if its name does not exist. Existing notes with the same lemma and language pair are detected across the collection. **Update existing card** replaces that note's content and audio with the preview while preserving its card IDs, review history, deck, tags, and reverse-card choice. Ordinary retries skip duplicates.
+- A deck is created if its name does not exist. Existing notes with the same lemma and language pair are detected in the selected deck. Adding to a different deck creates a separate copy; retries in the same deck skip duplicates. **Update existing card** updates all matching copies in the open profile while preserving their card IDs, review history, decks, tags, and reverse-card choices.
 - Generated entries are saved locally before attempting to add them. Open **Your words** to review or retry a draft without another OpenAI call. Retrying an entry uses its original language pair and the currently saved destination deck, tags, and reverse-card setting.
 - AnkiAdder writes to the open local Anki profile. Use Anki’s normal sync to send cards to your other devices.
 
@@ -63,13 +69,23 @@ Run `npm run test:batch` for isolated desktop checks of automatic additions, fai
 
 Open any result or an entry in **Your words** and click **Edit**. Change the word, pronunciation text, grammar, meanings, both translated examples, forms, notes or warnings. Add/remove meanings and form groups as needed. **Save changes** updates local history without any API call. **Save & update Anki**, or **Update existing card** afterward, also updates the linked Anki note while preserving its deck and review schedule. If Anki is offline, the local edit remains saved for retry. This editor covers entries generated by AnkiAdder, including older history; it does not import unrelated Anki cards.
 
+Open a word in **Your words** to browse it within history. Use **← Previous / Next →** or the keyboard’s **Left / Right arrow keys** to move through the current search results. Navigation stops at the first/last result and keeps the same order while you edit or regenerate an entry. Arrow keys retain their normal behavior in text fields and the edit dialog. **← Your words** returns to the filtered list.
+
+**Delete** is available in the history list and inside each word. Confirming deletion removes that local entry and its saved versions; Anki cards remain intact. Within a history word, choose **Add to deck** and add it to another deck. **Currently in these decks** reads the word's current card locations from the open Anki profile, including manual deck moves. Refresh after changing profiles or moving cards. Offline membership is shown as unavailable, never as an empty list.
+
+**Regenerate text only**, below the card, regenerates and reviews the selected entry using its original language pair and your currently selected model. It keeps the original word/lemma, pronunciation text, cached audio and Anki link, replacing the text in the same history record. Text costs accumulate; it makes no speech request and does not automatically update Anki, even with auto-add enabled. Use **Update existing card** when ready. Cancelled/failed requests or a model response that changes the lemma leave the previous entry intact. Swedish examples may naturally use **hen**, alongside **han** and **hon**.
+
+Generation treats dictionary evidence as partial and searches for other common uses. Review must explicitly account for every draft, saved and supplied dictionary definition, including nested idiom definitions. Missing checks, dropped saved meanings or merged distinct saved meanings stop regeneration before it overwrites anything. Corrected examples can replace awkward older examples. Semantic judgments still depend on the model.
+
+**Undo text regeneration** and **Undo pronunciation regeneration** restore the previous saved version independently, including after restarting. Repeat undo to step back through retained versions. No API request is made; cumulative costs remain because earlier requests were still billed. Restoring marks linked cards for explicit Anki update. This applies to regenerations made with this version; earlier overwritten text cannot be reconstructed automatically.
+
 Changing the dictionary word removes its old cached pronunciation from this entry so it cannot pronounce the wrong word. Updating an edited note does not automatically buy new audio; use **Generate pronunciation** explicitly for a new recording. Previously incurred cost receipts remain unchanged by manual edits. Renaming follows the original note identity and refuses conflicting words or a missing linked note in the open profile.
 
 Meaning headings now show only their definition, followed by two examples once each. Meanings are numbered. Older saved previews benefit immediately; to replace duplicated text already stored in Anki, open the entry and use **Update existing card**.
 
 ## Shorten an older card
 
-Open an older entry in **Your words**, then select **Make compact** to generate a short version. If needed, first set the languages to the original entry's language pair. Choose **Add to Anki** (or let auto-add detect the existing note), then **Update existing card**. This updates the existing note without deleting its review history. If Anki's editor is open on that note, close it before updating.
+Open an older entry in **Your words**, then select **Make compact**. This uses text regeneration with the original language pair, definition coverage checks and undo. Choose **Update existing card** to apply the result without deleting its review history. If Anki's editor is open on that note, close it before updating.
 
 The app upgrades its dedicated note type to support compact styling and an Audio field. This updates the shared layout of AnkiAdder notes; existing long text is retained until you explicitly replace it with a compact entry.
 
@@ -79,7 +95,7 @@ The **Pronunciation** switch beside **Create card** turns audio on/off immediate
 
 **Settings → API costs → Show the cost for each word** controls the cost display independently. It is on by default. Before generation, the app shows an illustrative estimate; after generation, it shows separate text, pronunciation and total USD estimates calculated from reported usage. These receipts are saved with each entry and preserved when replaying audio or re-adding a note. Reusing an existing pronunciation for a newly generated entry is $0 additional speech cost. Older entries without recorded usage show unavailable.
 
-Prices checked September 11, 2026: Luna standard input **$0.20**, cached input **$0.02**, and output **$1.20** per million tokens; Mini TTS text input **$0.60** and audio output **$12** per million tokens. Reasoning tokens are included in the reported output count, not charged twice. [Official OpenAI pricing](https://developers.openai.com/api/docs/pricing). The illustration assumes 1,000 input + 1,000 output text tokens and 100 input + 75 output speech tokens (about $0.00140 text and $0.00096 audio with those assumptions). Actual usage varies.
+Prices checked September 11, 2026: Luna standard input **$0.20**, cached input **$0.02**, and output **$1.20** per million tokens; Mini TTS text input **$0.60** and audio output **$12** per million tokens. Reasoning tokens are included in the reported output count, not charged twice. [Official OpenAI pricing](https://developers.openai.com/api/docs/pricing). The illustration assumes 1,000 input + 1,000 output generation tokens, 2,000 input + 1,000 output review tokens, and 100 input + 75 output speech tokens (about $0.00300 text and $0.00096 audio with those assumptions). Actual usage varies.
 
 The app requests speech streaming events to read usage while assembling the same MP3 file. Responses with no usage retain playable audio but show unavailable cost. Estimates are not invoices: they exclude unreported failed attempts, taxes, and account-specific pricing adjustments. They use bundled rates rather than fetching prices automatically. Unsupported models, processing tiers, or long-context usage show unavailable. Settings links to current pricing and your actual OpenAI usage dashboard. Disabling cost display does not change requests or billing.
 
@@ -87,13 +103,15 @@ Audio uses OpenAI's **gpt-4o-mini-tts** speech endpoint with the selected voice 
 
 Each new word/language/voice recording requires a separate paid speech request. MP3 files are cached under the app's `audio/` directory and reused across sessions and retries; playback makes no API request and needs no API key. A voice change applies to new recordings. **Generate audio for each word** in Settings controls automatic generation; the preview button can also generate audio explicitly for an older entry.
 
-Text output is capped at 4,000 tokens instead of 24,000, with low reasoning effort for Luna and short examples. There is no fixed common-meaning count; near synonyms are merged, rare senses omitted, and redundant usage text is empty. This is intended to reduce text-generation usage; a token ceiling is not a charge estimate or guaranteed saving. Audio adds its own usage. No live cost benchmark has been performed.
+Generation and language review each have an 8,000-token output cap, allowing room for more meanings and the coverage audit, with low reasoning effort for Luna. There is no fixed common-meaning count; redundant usage text is empty. A token ceiling is not a charge estimate or guaranteed saving. Audio adds its own usage. No representative live cost benchmark has been performed.
 
 If speech generation fails, the text draft is retained and automatic adding pauses. Retry **Generate pronunciation** without regenerating the text, or disable automatic audio and add the text-only card.
 
 ## Privacy and storage
 
 OpenAI and optional AnkiConnect keys are encrypted using Electron's operating-system-backed `safeStorage` (Windows DPAPI / macOS Keychain). Keys never appear in renderer settings responses. There is no plaintext fallback. Other processes running as your Windows user may still be able to decrypt DPAPI-protected data. The app sends words and language settings to OpenAI, with Responses API `store: false`; speech generation separately sends the lemma and language to OpenAI's audio endpoint. This does not override OpenAI's account-level retention policies. AnkiConnect traffic stays on loopback. There is no analytics service.
+
+For Swedish (Swedish/Svenska/sv/swe in Settings), the input word or phrase is also sent to Lexin's HTTPS dictionary service. Matching definitions and forms are included in the text-generation request. No API keys are sent to Lexin; lookup has a five-second timeout and makes no additional OpenAI request.
 
 Settings and generated entries are kept in Electron's user-data folder, normally `%APPDATA%/anki-adder` on Windows and `~/Library/Application Support/anki-adder` on macOS. Use `app.getPath('userData')` when diagnosing an installation with a customized path. `settings.json` contains encrypted secrets; `history.json` contains plain-text generated entries. History is retained until you remove that file while the app is closed. Copying encrypted settings between computers may require re-entering keys. Invalid saved JSON produces an error without overwriting the original file.
 
@@ -102,6 +120,7 @@ Settings and generated entries are kept in Electron's user-data folder, normally
 ```sh
 npm test          # Core logic, mocked API/Anki, persistence and error handling
 npm run test:ui   # Hidden Electron window; simulated OpenAI and Anki responses
+npm run test:history # History navigation and text-only regeneration with mock services
 npm run dist:win  # Windows installer, build on Windows
 npm run dist:mac  # macOS DMG + ZIP, build on macOS
 ```

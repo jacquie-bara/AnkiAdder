@@ -48,5 +48,11 @@ class Store {
     this.history = history;
     return record;
   }
+  async remove(id) {
+    const history = this.history.filter(item => item.id !== id);
+    if (history.length === this.history.length) throw new Error('This saved entry could not be found.');
+    await this.write('history.json', history);
+    this.history = history;
+  }
 }
 module.exports = { Store };

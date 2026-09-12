@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { calculate, estimate, amount } = require('../src/ui/pricing.js');
+const { calculate, combine, estimate, amount } = require('../src/ui/pricing.js');
 const { validateSettings } = require('../src/core.cjs');
 
 test('Luna price calculation applies cached-input discount and counts reasoning within output once', () => {
@@ -16,10 +16,18 @@ test('unknown models and missing, malformed or unsupported usage never display a
   assert.equal(amount(undefined), 'unavailable');
 });
 test('illustrative estimate and independent toggles preserve explicit off choices', () => {
-  assert.equal(estimate('gpt-5.6-luna', true).text.usd, 0.0014);
+  assert.equal(estimate('gpt-5.6-luna', true).text.usd, 0.003);
   assert.equal(estimate('gpt-5.6-luna', true).pronunciation.usd, 0.00096);
   assert.equal(estimate('gpt-5.6-luna', false).pronunciation.usd, 0);
   assert.equal(validateSettings({}).showCosts, true);
   assert.equal(validateSettings({ audioEnabled: false, showCosts: false }).audioEnabled, false);
   assert.equal(validateSettings({ audioEnabled: false, showCosts: false }).showCosts, false);
+});
+test('generation and review costs retain both receipts and missing usage is never treated as free', () => {
+  const cost = calculate('gpt-5.6-luna', { input_tokens: 1000, output_tokens: 1000 });
+  const total = combine([cost, cost]);
+  assert.equal(total.usd, 0.0028);
+  assert.equal(total.receipts.length, 2);
+  assert.equal(combine([cost, calculate('gpt-5.6-luna', undefined)]).usd, null);
+  assert.equal(combine([]).usd, null);
 });

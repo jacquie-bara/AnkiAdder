@@ -176,6 +176,7 @@
         <article id="preview" hidden></article>
       </section>
       <section id="page-history" class="page" hidden>
+        <div id="history-browser">
         <label for="history-search" class="sr-only">Search your words</label
         ><input
           id="history-search"
@@ -183,6 +184,17 @@
           type="search"
         />
         <div id="history-list"></div>
+        </div>
+        <div id="history-detail" hidden>
+          <nav id="history-navigation" aria-label="Word history navigation">
+            <button id="history-back" class="text-button">← Your words</button>
+            <div class="actions">
+              <button id="history-previous" class="secondary" aria-label="Previous word" title="Previous word (Left arrow)">← Previous</button>
+              <span id="history-position" role="status" aria-live="polite"></span>
+              <button id="history-next" class="secondary" aria-label="Next word" title="Next word (Right arrow)">Next →</button>
+            </div>
+          </nav>
+        </div>
       </section>
       <section id="page-settings" class="page" hidden>
         <form id="settings-form">

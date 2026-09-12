@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { DEFAULTS, COMPACT_SCHEMA, validateSettings, validateAnkiUrl, validateEntry, generateEntry, buildNote, addToAnki, MODEL_NAME, FIELDS } = require('../src/core.cjs');
+const { DEFAULTS, COMPACT_SCHEMA, validateSettings, validateAnkiUrl, validateEntry, buildNote, addToAnki, MODEL_NAME, FIELDS } = require('../src/core.cjs');
+const { generateEntry } = require('./review-helper.cjs');
 const { Store } = require('../src/store.cjs');
 const fixture = require('./fixture.cjs');
 const jsonResponse = data => ({ ok: true, json: async () => data });
@@ -30,7 +31,7 @@ test('OpenAI request uses the selected model, strict schema, two examples, and n
   assert.equal(request.url, 'https://api.openai.com/v1/responses');
   assert.equal(request.body.model, 'gpt-5.6-luna');
   assert.equal(request.body.store, false);
-  assert.equal(request.body.max_output_tokens, 4000);
+  assert.equal(request.body.max_output_tokens, 8000);
   assert.equal(request.body.reasoning.effort, 'low');
   assert.equal(request.body.text.format.schema.properties.meanings.maxItems, undefined);
   assert.equal(request.body.text.format.schema.properties.conjugations.maxItems, 1);
@@ -63,6 +64,8 @@ test('Anki integration creates note type and deck, then adds; retry skips duplic
     if (action === 'createModel') { createdModel = true; result = {}; }
     if (action === 'modelFieldNames') result = FIELDS;
     if (action === 'findNotes') result = saved ? [123] : [];
+    if (action === 'notesInfo') result = [{ cards: [321] }];
+    if (action === 'cardsInfo') result = [{ note: 123, deckName: DEFAULTS.deck }];
     if (action === 'createDeck') result = 2;
     if (action === 'addNote') { saved = true; result = 123; }
     return jsonResponse({ error: null, result });
@@ -89,7 +92,7 @@ test('compact output enforces limits while legacy history remains readable', () 
   assert.equal(validateEntry(tooLong, COMPACT_SCHEMA), tooLong);
   const tables = structuredClone(fixture); tables.conjugations.push(structuredClone(tables.conjugations[0]));
   assert.throws(() => validateEntry(tables, COMPACT_SCHEMA));
-  const text = structuredClone(fixture); text.meanings[0].examples[0].sentence = 'a'.repeat(111);
+  const text = structuredClone(fixture); text.meanings[0].examples[0].sentence = 'a'.repeat(281);
   assert.throws(() => validateEntry(text, COMPACT_SCHEMA));
 });
 

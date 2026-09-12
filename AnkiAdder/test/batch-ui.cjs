@@ -34,14 +34,18 @@ const { FIELDS } = require('../src/core.cjs');
         }
         if (String(url).includes('api.openai.com')) {
           const word = JSON.parse(request.input).word;
-          if (word === globalThis.holdWord) await new Promise(resolve => { globalThis.releaseWord = resolve; });
+          if (word === globalThis.holdWord && request.text.format.name === 'word_entry') await new Promise(resolve => { globalThis.releaseWord = resolve; });
           if (globalThis.failures && word === 'failtext') return { ok: false, status: 429, json: async () => ({ error: { message: 'Test quota failure' } }) };
-          return { ok: true, json: async () => ({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify({ ...fixture, word, lemma: word, warnings: word === 'uncertain' ? ['Uncertain meaning'] : [] }) }] }] }) };
+          const input = JSON.parse(request.input), entry = { ...fixture, word, lemma: word, warnings: word === 'uncertain' ? ['Uncertain meaning'] : [] };
+          if (input.senseCandidates) entry.senseChecks = input.senseCandidates.map(candidate => ({ id: candidate.id, status: 'covered', meaningIndexes: [Number(candidate.id.split(':')[1])], reason: '' }));
+          return { ok: true, json: async () => ({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(entry) }] }] }) };
         }
         if (globalThis.offline) throw new Error('offline');
         let result = ({ version: 6, deckNames: ['Default', 'Batch::日本語'], modelNames: ['AnkiAdder Vocabulary v1'], modelFieldNames: fields, createDeck: 1 })[request.action] ?? null;
         if (request.action === 'findNotes') { const key = request.params.query.match(/Identity:[a-f0-9]+/)[0]; result = globalThis.notes.has(key) ? [globalThis.notes.get(key)] : []; }
         if (request.action === 'storeMediaFile') result = request.params.filename;
+        if (request.action === 'notesInfo') result = request.params.notes.map(id => ({ cards: [id] }));
+        if (request.action === 'cardsInfo') result = request.params.cards.map(id => ({ note: id, deckName: 'Batch::日本語' }));
         if (request.action === 'addNote') {
           const note = request.params.note;
           if (globalThis.failures && note.fields.Word.includes('ankifail')) return { ok: true, json: async () => ({ result: null, error: 'Test Anki write failure' }) };
@@ -86,7 +90,7 @@ const { FIELDS } = require('../src/core.cjs');
     await page.locator('#batch-retry').click();
     await waitForBatch(page, state => state.status === 'completed' && state.items.every(item => item.status !== 'failed'));
     await page.waitForFunction(() => !document.querySelector('#batch-start').disabled);
-    assert.equal(await app.evaluate(() => globalThis.batchCalls.filter(c => c.model && c.model !== 'gpt-4o-mini-tts').length), beforeRetry + 1, 'Only the failed text request is generated again');
+    assert.equal(await app.evaluate(() => globalThis.batchCalls.filter(c => c.model && c.model !== 'gpt-4o-mini-tts').length), beforeRetry + 2, 'Only the failed text entry is generated and reviewed again');
     assert.equal((await page.evaluate(() => window.ankiAdder.history())).length, 6);
     await page.screenshot({ path: path.resolve('test-output/batch-complete.png'), fullPage: true });
     // An existing lemma must not add another note.
@@ -115,7 +119,7 @@ const { FIELDS } = require('../src/core.cjs');
     assert.equal(await app.evaluate(() => globalThis.batchCalls.filter(c => c.model).length), 0);
     await page.locator('#batch-resume').click();
     await waitForBatch(page, state => state.status === 'completed');
-    assert.equal(await app.evaluate(() => globalThis.batchCalls.filter(c => c.model && c.model !== 'gpt-4o-mini-tts').length), 1);
+    assert.equal(await app.evaluate(() => globalThis.batchCalls.filter(c => c.model && c.model !== 'gpt-4o-mini-tts').length), 2);
     assert.deepEqual(errors, []);
     console.log('Batch UI passed: automatic Anki additions, per-word failures, retry without text regeneration, duplicates, navigation/reload, stop and restart/resume.');
   } finally { await app?.close(); }

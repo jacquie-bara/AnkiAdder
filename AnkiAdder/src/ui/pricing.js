@@ -19,8 +19,11 @@
     return { usd: ((input - cached) * rate.input + cached * rate.cached + output * rate.output) / 1e6, basis: 'usage', model, usage: { input, output, cached }, rates: { ...rate }, checked };
   }
   const zero = reason => ({ usd: 0, basis: reason, checked });
+  function combine(receipts) {
+    return { usd: receipts.length && receipts.every(cost => cost.usd != null) ? receipts.reduce((sum, cost) => sum + cost.usd, 0) : null, basis: 'requests', receipts: [...receipts] };
+  }
   function estimate(model, audioEnabled) {
-    const text = calculate(model, { input_tokens: 1000, output_tokens: 1000 });
+    const text = combine([calculate(model, { input_tokens: 1000, output_tokens: 1000 }), calculate(model, { input_tokens: 2000, output_tokens: 1000 })]);
     const pronunciation = audioEnabled ? calculate('gpt-4o-mini-tts', { input_tokens: 100, output_tokens: 75 }) : zero('off');
     return { text, pronunciation };
   }
@@ -29,7 +32,7 @@
     if (cost.usd === 0) return '$0';
     return cost.usd < 0.00001 ? '<$0.00001' : `$${cost.usd.toFixed(5)}`;
   }
-  const api = { checked, source, rates, calculate, zero, estimate, amount };
+  const api = { checked, source, rates, calculate, combine, zero, estimate, amount };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AnkiPricing = api;
 })(typeof window !== 'undefined' ? window : globalThis);

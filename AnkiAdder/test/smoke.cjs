@@ -17,15 +17,22 @@ const { FIELDS, buildNote, DEFAULTS, CARD_TEMPLATES, CARD_CSS } = require('../sr
     await app.evaluate((_electron, { fixture, fields, audioBytes }) => {
       globalThis.testCalls = []; globalThis.testSaved = false; globalThis.testOffline = false; globalThis.testSpeechFail = false; globalThis.testFields = {};
       globalThis.fetch = async (url, options) => {
+        if (String(url).startsWith('https://lexin.nada.kth.se/')) return { ok: true, json: async () => ({ Status: 'no matching' }) };
         const request = JSON.parse(options.body); globalThis.testCalls.push(request);
+        if (globalThis.testReviewFail && request.text?.format?.name === 'reviewed_word_entry') return { ok: false, status: 429 };
         if (String(url).includes('/audio/speech')) return globalThis.testSpeechFail ? { ok: false, status: 429 } : { ok: true, headers: { get: () => 'text/event-stream' }, text: async () => `data: ${JSON.stringify({ type: 'speech.audio.delta', audio: audioBytes })}\n\ndata: ${JSON.stringify({ type: 'speech.audio.done', usage: { input_tokens: 100, output_tokens: 75 } })}\n\n` };
-        if (String(url).includes('api.openai.com')) return { ok: true, json: async () => ({ status: 'completed', usage: { input_tokens: 1000, output_tokens: 1000, input_tokens_details: { cached_tokens: 500 } }, output: [{ content: [{ type: 'output_text', text: JSON.stringify(fixture) }] }] }) };
+        if (String(url).includes('api.openai.com')) {
+          const input = JSON.parse(request.input), entry = structuredClone(fixture);
+          if (input.senseCandidates) entry.senseChecks = input.senseCandidates.map(candidate => ({ id: candidate.id, status: 'covered', meaningIndexes: [Number(candidate.id.split(':')[1])], reason: '' }));
+          return { ok: true, json: async () => ({ status: 'completed', usage: { input_tokens: 1000, output_tokens: 1000, input_tokens_details: { cached_tokens: 500 } }, output: [{ content: [{ type: 'output_text', text: JSON.stringify(entry) }] }] }) };
+        }
         if (globalThis.testOffline) throw new Error('offline');
         let result = ({ version: 6, deckNames: ['Default', 'Swedish', 'Swedish::Verbs', '日本語', 'Empty deck', '日本語::漢字'], modelNames: ['AnkiAdder Vocabulary v1'], modelFieldNames: fields, findNotes: globalThis.testSaved ? [456] : [], createDeck: 1, addNote: 456 })[request.action] ?? null;
         if (request.action === 'storeMediaFile') result = request.params.filename;
-        if (request.action === 'addNote') { globalThis.testSaved = true; globalThis.testFields = request.params.note.fields; }
+        if (request.action === 'addNote') { globalThis.testSaved = true; globalThis.testFields = request.params.note.fields; globalThis.testDeck = request.params.note.deckName; }
         if (request.action === 'updateNoteFields') Object.assign(globalThis.testFields, request.params.note.fields);
-        if (request.action === 'notesInfo') result = [{ fields: Object.fromEntries(Object.entries(globalThis.testFields).map(([k,v]) => [k, { value: v }])) }];
+        if (request.action === 'notesInfo') result = [{ cards: [789], fields: Object.fromEntries(Object.entries(globalThis.testFields).map(([k,v]) => [k, { value: v }])) }];
+        if (request.action === 'cardsInfo') result = [{ note: 456, deckName: globalThis.testDeck || 'Default' }];
         return { ok: true, json: async () => ({ result, error: null }) };
       };
     }, { fixture, fields: FIELDS, audioBytes });
@@ -56,7 +63,7 @@ const { FIELDS, buildNote, DEFAULTS, CARD_TEMPLATES, CARD_CSS } = require('../sr
     assert.equal(await page.locator('.example-list li').count(), 6);
     assert.equal(await page.locator('.key-forms span').count(), 6);
     assert.equal(await page.locator('.vocab-card table').count(), 0);
-    assert((await page.locator('#cost-summary').textContent()).includes('Text $0.00131'));
+    assert((await page.locator('#cost-summary').textContent()).includes('Text $0.00262'));
     assert((await page.locator('#cost-summary').textContent()).includes('Pronunciation $0.00096'));
     await page.locator('#word').blur();
     await page.screenshot({ path: path.join(output, 'compact-preview.png'), fullPage: true });
@@ -74,7 +81,7 @@ const { FIELDS, buildNote, DEFAULTS, CARD_TEMPLATES, CARD_CSS } = require('../sr
     assert.equal(await app.evaluate(() => globalThis.testCalls.filter(c => c.model === 'gpt-4o-mini-tts').length), 1);
     await page.locator('#add-note').click();
     console.log('Checking note addition');
-    await page.getByText('Added to Anki. Your next word is waiting.').waitFor();
+    await page.getByText('Added to the selected Anki deck.').waitFor();
     assert.match(await app.evaluate(() => globalThis.testFields.Audio), /^\[sound:ankiadder-.+\.mp3\]$/);
     await page.locator('#add-note').click();
     await page.locator('#update-note').waitFor();
@@ -138,6 +145,8 @@ const { FIELDS, buildNote, DEFAULTS, CARD_TEMPLATES, CARD_CSS } = require('../sr
     // Playback preserves the original receipt; cached reuse for a new word entry is $0.
     const original = (await page.evaluate(() => window.ankiAdder.history())).find(r => r.id === history[history.length - 1].id);
     assert.equal(original.costs.pronunciation.usd, 0.00096);
+    assert.equal(original.costs.text.receipts.length, 2);
+    assert.equal(original.costs.text.usd, 0.00262);
     assert.equal(history[0].costs.pronunciation.usd, 0);
     await page.locator('.nav[data-page=settings]').click();
     await page.locator('[name=showCosts]').uncheck();
@@ -186,6 +195,15 @@ const { FIELDS, buildNote, DEFAULTS, CARD_TEMPLATES, CARD_CSS } = require('../sr
     await page.locator('#update-note').click();
     await page.getByText('Updated in Anki. Your review history is preserved.').waitFor();
     assert.equal(await app.evaluate(() => globalThis.testFields.Audio), `[sound:${repaired.audio.filename}]`);
+    await page.locator('[data-restore=audio]').click();
+    await page.waitForFunction(() => document.querySelector('#notice').textContent.startsWith('Previous version restored'));
+    const undoneAudio = (await page.evaluate(() => window.ankiAdder.history())).find(r => r.id === original.id);
+    assert.equal(undoneAudio.audio.filename, beforeRepair.audio.filename);
+    assert.deepEqual(undoneAudio.costs, repaired.costs);
+    assert.equal(await app.evaluate(() => globalThis.testCalls.filter(c => c.model === 'gpt-4o-mini-tts').length), repairSpeechCalls);
+    await page.locator('#update-note').click();
+    await page.getByText('Updated in Anki. Your review history is preserved.').waitFor();
+    assert.equal(await app.evaluate(() => globalThis.testFields.Audio), `[sound:${beforeRepair.audio.filename}]`);
     // Render the actual Anki back template with the same fields/styles at 1000×760.
     const note = buildNote(fixture, { ...DEFAULTS, sourceLanguage: 'Swedish' });
     let back = CARD_TEMPLATES[0].Back.replace(/{{#(\w+)}}([\s\S]*?){{\/\1}}/g, (_match, key, content) => note.fields[key] ? content : '');
@@ -204,6 +222,15 @@ const { FIELDS, buildNote, DEFAULTS, CARD_TEMPLATES, CARD_CSS } = require('../sr
     }
     await browserPage.evaluate(() => { document.body.classList.remove('nightMode'); document.documentElement.style.background = '#e4e8ee'; });
     await browserPage.screenshot({ path: path.join(output, 'anki-compact-card.png') }); await browserPage.close();
-    console.log('Desktop smoke passed: compact screen fit, full deck picker, autosave, history edits, free Anki updates, real MP3 playback, cached audio, speech failure recovery, offline drafts, reload.');
+    const beforeReviewFailure = (await page.evaluate(() => window.ankiAdder.history())).length;
+    const addsBeforeReviewFailure = await app.evaluate(() => globalThis.testCalls.filter(c => c.action === 'addNote').length);
+    const speechBeforeReviewFailure = await app.evaluate(() => globalThis.testCalls.filter(c => c.model === 'gpt-4o-mini-tts').length);
+    await page.evaluate(async () => window.ankiAdder.saveSettings({ ...await window.ankiAdder.settings(), autoAdd: true }));
+    await app.evaluate(() => { globalThis.testReviewFail = true; });
+    assert.match(await page.evaluate(async word => { try { await window.ankiAdder.generate(word); return ''; } catch (error) { return error.message; } }, fixture.lemma), /Language review failed/);
+    assert.equal((await page.evaluate(() => window.ankiAdder.history())).length, beforeReviewFailure);
+    assert.equal(await app.evaluate(() => globalThis.testCalls.filter(c => c.action === 'addNote').length), addsBeforeReviewFailure);
+    assert.equal(await app.evaluate(() => globalThis.testCalls.filter(c => c.model === 'gpt-4o-mini-tts').length), speechBeforeReviewFailure);
+    console.log('Desktop smoke passed: compact screen fit, autosave, editing, audio, Anki updates, two text receipts, and review failure blocks saving, speech and automatic addition.');
   } finally { await app.close(); }
 })().catch(e => { console.error(e); process.exitCode = 1; });
